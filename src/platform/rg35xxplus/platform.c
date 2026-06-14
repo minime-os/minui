@@ -857,11 +857,13 @@ SDL_Surface* PLAT_initVideo(void) {
 	// LOG_info("Current render driver: %s\n", info.name);
 	
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"1"); // linear
+	LOG_info("Creating SDL texture: RGB565 %ix%i\n", w,h);
 	vid.texture = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGB565, SDL_TEXTUREACCESS_STREAMING, w,h);
 	if (!vid.texture) {
 		LOG_error("SDL texture creation failed: %s\n", SDL_GetError());
 		exit(1);
 	}
+	LOG_info("SDL texture created\n");
 	vid.target	= NULL; // only needed for non-native sizes
 	
 	// TODO: doesn't work here
@@ -881,6 +883,7 @@ SDL_Surface* PLAT_initVideo(void) {
 		LOG_error("SDL screen surface creation failed: %s\n", SDL_GetError());
 		exit(1);
 	}
+	LOG_info("SDL screen surface created\n");
 	vid.width	= w;
 	vid.height	= h;
 	vid.pitch	= p;

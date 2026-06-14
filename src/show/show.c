@@ -53,21 +53,25 @@ int main(int argc , char* argv[]) {
 	SDL_RendererInfo info;
 	if (SDL_GetRendererInfo(renderer, &info) == 0)
 		fprintf(stderr, "SDL render driver: %s\n", info.name);
+	fprintf(stderr, "Creating SDL texture: RGB565 %ix%i\n", w,h);
 	SDL_Texture* texture = SDL_CreateTexture(renderer,SDL_PIXELFORMAT_RGB565, SDL_TEXTUREACCESS_STREAMING, w,h);
 	if (!texture) {
 		fprintf(stderr, "SDL texture creation failed: %s\n", SDL_GetError());
 		return 1;
 	}
+	fprintf(stderr, "SDL texture created\n");
 	void* pixels;
 	if (SDL_LockTexture(texture, NULL, &pixels, &p) != 0) {
 		fprintf(stderr, "SDL texture lock failed: %s\n", SDL_GetError());
 		return 1;
 	}
+	fprintf(stderr, "SDL texture locked\n");
 	SDL_Surface* screen = SDL_CreateRGBSurfaceFrom(pixels, w,h, FIXED_DEPTH, p, RGBA_MASK_565);
 	if (!screen) {
 		fprintf(stderr, "SDL screen surface creation failed: %s\n", SDL_GetError());
 		return 1;
 	}
+	fprintf(stderr, "SDL screen surface created\n");
 	SDL_FillRect(screen, NULL, 0);
 	SDL_Surface* img = IMG_Load(path);
 	SDL_BlitSurface(img, NULL, screen, &(SDL_Rect){(screen->w-img->w)/2,(screen->h-img->h)/2});
