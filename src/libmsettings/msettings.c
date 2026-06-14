@@ -209,7 +209,7 @@ void SetRawVolume(int val) { // 0 - 100
 	snprintf(cmd, sizeof(cmd),
 		"amixer -q -c %s sset '%s' %i%% > /dev/null 2>&1 || "
 		"amixer -q sset '%s' %i%% > /dev/null 2>&1",
-		sound_card, sound_mixer, val, val, val);
+		sound_card, sound_mixer, val, sound_mixer, val);
 	system(cmd);
 }
 
