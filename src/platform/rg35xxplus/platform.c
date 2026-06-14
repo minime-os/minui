@@ -1238,6 +1238,22 @@ void PLAT_enableOverlay(int enable) {
 ///////////////////////////////
 
 static int online = 0;
+static int getOCVCapacity(int voltage_uv) {
+	FILE* file = fopen("/sys/firmware/devicetree/base/battery/ocv-capacity-table-0", "rb");
+	uint8_t entry[8];
+	int capacity = 0;
+
+	if (!file) return 0;
+	while (fread(entry, sizeof(entry), 1, file)==1) {
+		uint32_t ocv = (uint32_t)entry[0]<<24 | (uint32_t)entry[1]<<16 |
+			(uint32_t)entry[2]<<8 | entry[3];
+		capacity = (uint32_t)entry[4]<<24 | (uint32_t)entry[5]<<16 |
+			(uint32_t)entry[6]<<8 | entry[7];
+		if (voltage_uv>=ocv) break;
+	}
+	fclose(file);
+	return capacity;
+}
 void PLAT_getBatteryStatus(int* is_charging, int* charge) {
 	int i;
 
@@ -1253,6 +1269,8 @@ void PLAT_getBatteryStatus(int* is_charging, int* charge) {
 		i = getInt("/sys/class/power_supply/battery/capacity");
 	else
 		i = getInt("/sys/class/power_supply/axp20x-battery/capacity");
+	if (i<=0 && exists("/sys/class/power_supply/battery/voltage_avg"))
+		i = getOCVCapacity(getInt("/sys/class/power_supply/battery/voltage_avg"));
 	// worry less about battery and more about the game you're playing
 	     if (i>80) *charge = 100;
 	else if (i>60) *charge =  80;
