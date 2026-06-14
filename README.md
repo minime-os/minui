@@ -1,3 +1,3 @@
 # MinUI for Minime
 
-MinUI launcher and libretro frontend wrapper adapted for the Minime firmware.
+[MinUI](https://github.com/shauninman/MinUI) fork, packaged for minime firmware
