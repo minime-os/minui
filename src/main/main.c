@@ -474,7 +474,12 @@ enum LauncherScreen {
 
 #define MAX_RECENTS 24 // a multiple of all menu rows
 static void saveRecents(void) {
-	FILE* file = fopen(RECENT_PATH, "w");
+	if (recents->count==0) {
+		unlink(RECENT_PATH);
+		return;
+	}
+
+	FILE* file = fopen(RECENT_PATH ".tmp", "w");
 	if (file) {
 		for (int i=0; i<recents->count; i++) {
 			Recent* recent = recents->items[i];
@@ -486,6 +491,7 @@ static void saveRecents(void) {
 			putc('\n', file);
 		}
 		fclose(file);
+		rename(RECENT_PATH ".tmp", RECENT_PATH);
 	}
 }
 static void addRecent(char* path, char* alias) {
