@@ -25,7 +25,7 @@ int plat_fixed_height = 480;
 int plat_has_hdmi = 0;
 int plat_main_row_count = 6;
 int plat_padding = 10;
-int plat_screen_rotation = 0;
+int plat_screen_rotation = -1;
 int on_hdmi = 0;
 int is_cubexx = 0;
 int is_rg34xx = 0;
@@ -136,7 +136,9 @@ static void load_traits(void) {
     // derive layout properties
     plat_padding = (plat_fixed_width >= 720) ? 40 : 10;
     plat_main_row_count = (plat_fixed_width >= 720) ? 8 : 6;
-    rotate = plat_screen_rotation / 90;
+    if (plat_screen_rotation != -1) {
+        rotate = plat_screen_rotation / 90;
+    }
     is_cubexx = (plat_fixed_width == 720 && plat_fixed_height == 720);
     is_rg34xx = (plat_fixed_width == 720 && plat_fixed_height == 480);
 }
@@ -941,7 +943,9 @@ SDL_Surface* PLAT_initVideo(void) {
 	SDL_DisplayMode mode;
 	SDL_GetCurrentDisplayMode(0, &mode);
 	LOG_info("Current display mode: %ix%i (%s)\n", mode.w,mode.h, SDL_GetPixelFormatName(mode.format));
-	if (mode.h>mode.w) rotate = 3; // no longer set on 28xx (because of SDL2 rotation patch?)
+	if (plat_screen_rotation == -1) {
+		if (mode.h>mode.w) rotate = 3; // no longer set on 28xx (because of SDL2 rotation patch?)
+	}
 	vid.renderer = SDL_CreateRenderer(vid.window,-1,SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);
 	if (!vid.renderer) {
 		LOG_error("SDL renderer creation failed: %s\n", SDL_GetError());

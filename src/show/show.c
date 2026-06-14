@@ -4,10 +4,43 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 
+#include <string.h>
+
 #define FIXED_BPP		2
 #define FIXED_DEPTH		(FIXED_BPP * 8)
 
 #define RGBA_MASK_565	0xF800, 0x07E0, 0x001F, 0x0000
+
+static int get_screen_rotation(void) {
+	FILE* file = fopen("/mnt/sdcard/.minime/traits", "r");
+	if (!file) return -1;
+	char line[256];
+	int rot = -1;
+	while (fgets(line, sizeof(line), file)) {
+		if (line[0] == '#' || line[0] == '\n') continue;
+		char* sep = strchr(line, '=');
+		if (!sep) continue;
+		*sep = '\0';
+		char* key = line;
+		char* val = sep + 1;
+		char* end = key + strlen(key) - 1;
+		while (end >= key && (*end == ' ' || *end == '\n' || *end == '\r')) {
+			*end = '\0';
+			end--;
+		}
+		end = val + strlen(val) - 1;
+		while (end >= val && (*end == ' ' || *end == '\n' || *end == '\r')) {
+			*end = '\0';
+			end--;
+		}
+		if (strcmp(key, "screen_rotation") == 0) {
+			rot = atoi(val);
+			break;
+		}
+	}
+	fclose(file);
+	return rot;
+}
 
 int main(int argc , char* argv[]) {
 	if (argc<2) {
@@ -38,9 +71,14 @@ int main(int argc , char* argv[]) {
 	}
 	
 	int rotate = 0;
+	int traits_rot = get_screen_rotation();
 	SDL_DisplayMode mode;
 	SDL_GetCurrentDisplayMode(0, &mode);
-	if (mode.h>mode.w) rotate = 3;
+	if (traits_rot == -1) {
+		if (mode.h>mode.w) rotate = 3;
+	} else {
+		rotate = traits_rot / 90;
+	}
 	w = mode.w;
 	h = mode.h;
 	p = mode.w * FIXED_BPP;
