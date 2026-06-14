@@ -65,7 +65,7 @@ void InitSettings(void) {
 		// Wait for host to ftruncate the shared memory to prevent mapping a 0-size SHM
 		struct stat st;
 		int retry = 0;
-		while (retry < 1000) { // up to 1 second
+		while (retry < 10000) { // up to 10 seconds under heavy boot load
 			if (fstat(shm_fd, &st) == 0 && st.st_size >= shm_size) {
 				break;
 			}
