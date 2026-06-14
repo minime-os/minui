@@ -403,7 +403,6 @@ void SETTINGS_BT_BACKEND_quit(void)
 
 int SETTINGS_BT_BACKEND_refresh(struct settings_snapshot *snapshot)
 {
-	printf("[INFO] SETTINGS_BT_BACKEND_refresh start\n"); fflush(stdout);
 	int i;
 	int out = 0;
 
@@ -447,7 +446,6 @@ int SETTINGS_BT_BACKEND_refresh(struct settings_snapshot *snapshot)
 	}
 
 	snapshot->bt_device_count = out;
-	printf("[INFO] SETTINGS_BT_BACKEND_refresh end\n"); fflush(stdout);
 	return 0;
 }
 

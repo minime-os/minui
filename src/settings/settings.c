@@ -418,7 +418,6 @@ static void settings_drawCustomHints(SDL_Surface *screen, int show_setting)
 ///////////////////////////////////////
 void SETTINGS_init(void)
 {
-	LOG_info("SETTINGS_init start\n");
 	memset(&settings, 0, sizeof(settings));
 	settings.menu_stack[0] = SETTINGS_MENU_ROOT;
 	UI_DIALOG_init(&settings.dialog);

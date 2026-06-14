@@ -33,14 +33,14 @@ static int is_wifi_interface_up(void) {
 	FILE* f = fopen("/sys/class/net/wlan0/operstate", "r");
 	if (!f) return 0;
 	char state[16] = {0};
+	int up = 0;
 	if (fgets(state, sizeof(state), f)) {
-		fclose(f);
 		if (strncmp(state, "up", 2) == 0) {
-			return 1;
+			up = 1;
 		}
 	}
 	fclose(f);
-	return 0;
+	return up;
 }
 
 static void get_connected_ssid(char* ssid_out, size_t max_len) {
@@ -261,7 +261,6 @@ void SETTINGS_WIFI_BACKEND_quit(void) {
 }
 
 int SETTINGS_WIFI_BACKEND_refresh(struct settings_snapshot *snapshot) {
-	printf("[INFO] SETTINGS_WIFI_BACKEND_refresh start\n"); fflush(stdout);
 	if (!snapshot) return -1;
 	
 	wifi_enabled = is_wifi_interface_present() && is_wifi_interface_up();
@@ -294,7 +293,6 @@ int SETTINGS_WIFI_BACKEND_refresh(struct settings_snapshot *snapshot) {
 		snapshot->wifi_network_count = 0;
 	}
 	
-	printf("[INFO] SETTINGS_WIFI_BACKEND_refresh end\n"); fflush(stdout);
 	return 0;
 }
 

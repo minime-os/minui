@@ -599,7 +599,6 @@ static void jobs_apply_pending(struct settings_snapshot *snapshot)
 
 static void jobs_refresh_snapshot(void)
 {
-	LOG_info("jobs_refresh_snapshot start\n");
 	struct settings_snapshot current;
 	struct settings_snapshot next;
 	uint32_t generation;
@@ -633,7 +632,6 @@ static void jobs_refresh_snapshot(void)
 		next.generation = generation + 1;
 	jobs.snapshot = next;
 	pthread_mutex_unlock(&jobs.lock);
-	LOG_info("jobs_refresh_snapshot end\n");
 }
 
 static void jobs_handle_wifi_toggle(const struct settings_job *job)
@@ -1044,7 +1042,6 @@ static void *settings_jobs_worker(void *arg)
 
 void SETTINGS_JOBS_init(void)
 {
-	LOG_info("SETTINGS_JOBS_init start\n");
 	memset(&jobs, 0, sizeof(jobs));
 	pthread_mutex_init(&jobs.lock, NULL);
 	pthread_cond_init(&jobs.cond, NULL);
