@@ -125,7 +125,21 @@ int main(int argc , char* argv[]) {
 	SDL_UnlockTexture(texture);
 	fprintf(stderr, "SDL texture unlocked\n");
 
-	if (rotate) SDL_RenderCopyEx(renderer,texture,NULL,&(SDL_Rect){0,w,w,h},rotate*90,&(SDL_Point){0,0},SDL_FLIP_NONE);
+	if (rotate) {
+		int dx = 0;
+		int dy = 0;
+		if (rotate == 1) {
+			dx = h;
+			dy = 0;
+		} else if (rotate == 2) {
+			dx = w;
+			dy = h;
+		} else if (rotate == 3) {
+			dx = 0;
+			dy = w;
+		}
+		SDL_RenderCopyEx(renderer,texture,NULL,&(SDL_Rect){dx,dy,w,h},rotate*90,&(SDL_Point){0,0},SDL_FLIP_NONE);
+	}
 	else SDL_RenderCopy(renderer, texture, NULL,NULL);
 	fprintf(stderr, "SDL texture copied\n");
 	SDL_RenderPresent(renderer);

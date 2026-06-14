@@ -1268,7 +1268,21 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
 			return;
 		}
 		SDL_UpdateTexture(vid.texture,NULL,vid.screen->pixels,vid.screen->pitch);
-		if (rotate && !on_hdmi) SDL_RenderCopyEx(vid.renderer,vid.texture,NULL,&(SDL_Rect){0,device_width,device_width,device_height},rotate*90,&(SDL_Point){0,0},SDL_FLIP_NONE);
+		if (rotate && !on_hdmi) {
+			int dx = 0;
+			int dy = 0;
+			if (rotate == 1) {
+				dx = device_height;
+				dy = 0;
+			} else if (rotate == 2) {
+				dx = device_width;
+				dy = device_height;
+			} else if (rotate == 3) {
+				dx = 0;
+				dy = device_width;
+			}
+			SDL_RenderCopyEx(vid.renderer,vid.texture,NULL,&(SDL_Rect){dx,dy,device_width,device_height},rotate*90,&(SDL_Point){0,0},SDL_FLIP_NONE);
+		}
 		else SDL_RenderCopy(vid.renderer, vid.texture, NULL,NULL);
 		SDL_RenderPresent(vid.renderer);
 		return;
