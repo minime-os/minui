@@ -61,6 +61,18 @@ void InitSettings(void) {
 	if (shm_fd==-1 && errno==EEXIST) { // already exists
 		puts("Settings client");
 		shm_fd = shm_open(SHM_KEY, O_RDWR, 0644);
+		
+		// Wait for host to ftruncate the shared memory to prevent mapping a 0-size SHM
+		struct stat st;
+		int retry = 0;
+		while (retry < 1000) { // up to 1 second
+			if (fstat(shm_fd, &st) == 0 && st.st_size >= shm_size) {
+				break;
+			}
+			usleep(1000); // sleep 1ms
+			retry++;
+		}
+		
 		settings = mmap(NULL, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
 	}
 	else { // host
