@@ -171,14 +171,45 @@ void SetRawBrightness(int val) { // 0 - 255
 		close(fd);
 	}
 }
+static void trim(char* str) {
+	char* end = str + strlen(str) - 1;
+	while (end >= str && (*end == ' ' || *end == '\n' || *end == '\r')) {
+		*end = '\0';
+		end--;
+	}
+}
+
 void SetRawVolume(int val) { // 0 - 100
-	printf("SetRawVolume(%i)\n", val); fflush(stdout);
+	char sound_card[64] = "default";
+	char sound_mixer[64] = "lineout volume";
+	
+	FILE* file = fopen("/mnt/sdcard/.minime/traits", "r");
+	if (file) {
+		char line[256];
+		while (fgets(line, sizeof(line), file)) {
+			if (line[0] == '#' || line[0] == '\n') continue;
+			char* sep = strchr(line, '=');
+			if (!sep) continue;
+			*sep = '\0';
+			char* key = line;
+			char* val_str = sep + 1;
+			trim(key);
+			trim(val_str);
+			if (strcmp(key, "sound_card") == 0) {
+				strcpy(sound_card, val_str);
+			} else if (strcmp(key, "sound_mixer") == 0) {
+				strcpy(sound_mixer, val_str);
+			}
+		}
+		fclose(file);
+	}
+	
+	printf("SetRawVolume(%i) using card '%s' mixer '%s'\n", val, sound_card, sound_mixer); fflush(stdout);
 	char cmd[256];
 	snprintf(cmd, sizeof(cmd),
-		"amixer -q -c rk817ext sset Master %i%% "
-		"> /dev/null 2>&1 || amixer -q sset 'lineout volume' %i%% "
-		"> /dev/null 2>&1", val, val);
-	// // puts(cmd); fflush(stdout);
+		"amixer -q -c %s sset '%s' %i%% > /dev/null 2>&1 || "
+		"amixer -q sset '%s' %i%% > /dev/null 2>&1",
+		sound_card, sound_mixer, val, val, val);
 	system(cmd);
 }
 

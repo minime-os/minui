@@ -1,6 +1,7 @@
-// rg35xxplus
+// minime platform
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <linux/fb.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
@@ -19,9 +20,126 @@
 
 #include "scaler.h"
 
+int plat_fixed_width = 640;
+int plat_fixed_height = 480;
+int plat_has_hdmi = 0;
+int plat_main_row_count = 6;
+int plat_padding = 10;
+int plat_screen_rotation = 0;
+int on_hdmi = 0;
 int is_cubexx = 0;
 int is_rg34xx = 0;
-int on_hdmi = 0;
+static int rotate = 0;
+static char plat_device_model[256] = "";
+
+static char trait_battery_capacity_path[256] = "";
+static char trait_charger_online_path[256] = "";
+static char trait_backlight_path[256] = "/sys/class/backlight/backlight/brightness";
+static char trait_lid_switch_path[256] = "";
+static char trait_rumble_path[256] = "";
+static char trait_power_led_path[256] = "";
+static char trait_sound_card[64] = "default";
+static char trait_sound_mixer[64] = "lineout volume";
+static char trait_input_gamepad[64] = "gpio-keys-gamepad";
+static char trait_input_power[64] = "axp20x-pek";
+static char trait_input_volume[64] = "gpio-keys-volume";
+
+// Raw keycodes
+static int k_up = 544;
+static int k_down = 545;
+static int k_left = 546;
+static int k_right = 547;
+static int k_a = 305;
+static int k_b = 304;
+static int k_x = 308;
+static int k_y = 307;
+static int k_c = 306;
+static int k_z = 309;
+static int k_l1 = 310;
+static int k_r1 = 311;
+static int k_l2 = 312;
+static int k_r2 = 313;
+static int k_l3 = 317;
+static int k_r3 = 318;
+static int k_start = 315;
+static int k_select = 314;
+static int k_menu = 316;
+static int k_power = 116;
+static int k_vol_up = 115;
+static int k_vol_down = 114;
+
+static void trim(char* str) {
+    char* end = str + strlen(str) - 1;
+    while (end >= str && (*end == ' ' || *end == '\n' || *end == '\r')) {
+        *end = '\0';
+        end--;
+    }
+}
+
+static void load_traits(void) {
+    FILE* file = fopen("/mnt/sdcard/.minime/traits", "r");
+    if (!file) return;
+
+    char line[256];
+    while (fgets(line, sizeof(line), file)) {
+        if (line[0] == '#' || line[0] == '\n') continue;
+        char* sep = strchr(line, '=');
+        if (!sep) continue;
+        *sep = '\0';
+        char* key = line;
+        char* val = sep + 1;
+        trim(key);
+        trim(val);
+
+        if (strcmp(key, "device_model") == 0) strcpy(plat_device_model, val);
+        else if (strcmp(key, "screen_width") == 0) plat_fixed_width = atoi(val);
+        else if (strcmp(key, "screen_height") == 0) plat_fixed_height = atoi(val);
+        else if (strcmp(key, "screen_rotation") == 0) plat_screen_rotation = atoi(val);
+        else if (strcmp(key, "has_hdmi") == 0) plat_has_hdmi = (strcmp(val, "yes") == 0);
+        else if (strcmp(key, "has_lid") == 0) lid.has_lid = (strcmp(val, "yes") == 0);
+        else if (strcmp(key, "battery_capacity_path") == 0) strcpy(trait_battery_capacity_path, val);
+        else if (strcmp(key, "charger_online_path") == 0) strcpy(trait_charger_online_path, val);
+        else if (strcmp(key, "backlight_path") == 0) strcpy(trait_backlight_path, val);
+        else if (strcmp(key, "lid_switch_path") == 0) strcpy(trait_lid_switch_path, val);
+        else if (strcmp(key, "rumble_path") == 0) strcpy(trait_rumble_path, val);
+        else if (strcmp(key, "power_led_path") == 0) strcpy(trait_power_led_path, val);
+        else if (strcmp(key, "sound_card") == 0) strcpy(trait_sound_card, val);
+        else if (strcmp(key, "sound_mixer") == 0) strcpy(trait_sound_mixer, val);
+        else if (strcmp(key, "input_gamepad_device_name") == 0) strcpy(trait_input_gamepad, val);
+        else if (strcmp(key, "input_power_device_name") == 0) strcpy(trait_input_power, val);
+        else if (strcmp(key, "input_volume_device_name") == 0) strcpy(trait_input_volume, val);
+        else if (strcmp(key, "key_up") == 0) k_up = atoi(val);
+        else if (strcmp(key, "key_down") == 0) k_down = atoi(val);
+        else if (strcmp(key, "key_left") == 0) k_left = atoi(val);
+        else if (strcmp(key, "key_right") == 0) k_right = atoi(val);
+        else if (strcmp(key, "key_a") == 0) k_a = atoi(val);
+        else if (strcmp(key, "key_b") == 0) k_b = atoi(val);
+        else if (strcmp(key, "key_x") == 0) k_x = atoi(val);
+        else if (strcmp(key, "key_y") == 0) k_y = atoi(val);
+        else if (strcmp(key, "key_c") == 0) k_c = atoi(val);
+        else if (strcmp(key, "key_z") == 0) k_z = atoi(val);
+        else if (strcmp(key, "key_l1") == 0) k_l1 = atoi(val);
+        else if (strcmp(key, "key_r1") == 0) k_r1 = atoi(val);
+        else if (strcmp(key, "key_l2") == 0) k_l2 = atoi(val);
+        else if (strcmp(key, "key_r2") == 0) k_r2 = atoi(val);
+        else if (strcmp(key, "key_l3") == 0) k_l3 = atoi(val);
+        else if (strcmp(key, "key_r3") == 0) k_r3 = atoi(val);
+        else if (strcmp(key, "key_start") == 0) k_start = atoi(val);
+        else if (strcmp(key, "key_select") == 0) k_select = atoi(val);
+        else if (strcmp(key, "key_menu") == 0) k_menu = atoi(val);
+        else if (strcmp(key, "key_power") == 0) k_power = atoi(val);
+        else if (strcmp(key, "key_vol_up") == 0) k_vol_up = atoi(val);
+        else if (strcmp(key, "key_vol_down") == 0) k_vol_down = atoi(val);
+    }
+    fclose(file);
+
+    // derive layout properties
+    plat_padding = (plat_fixed_width >= 720) ? 40 : 10;
+    plat_main_row_count = (plat_fixed_width >= 720) ? 8 : 6;
+    rotate = plat_screen_rotation / 90;
+    is_cubexx = (plat_fixed_width == 720 && plat_fixed_height == 720);
+    is_rg34xx = (plat_fixed_width == 720 && plat_fixed_height == 480);
+}
 
 ///////////////////////////////
 
@@ -192,13 +310,12 @@ static int findExternalGamepadEvent(GamepadType* type) {
 	return -1;
 }
 
-#define LID_PATH "/sys/class/power_supply/axp2202-battery/hallkey"
 void PLAT_initLid(void) {
-	lid.has_lid = exists(LID_PATH);
+	lid.has_lid = strlen(trait_lid_switch_path) > 0 && exists(trait_lid_switch_path);
 }
 int PLAT_lidChanged(int* state) {
 	if (lid.has_lid) {
-		int lid_open = getInt(LID_PATH);
+		int lid_open = getInt(trait_lid_switch_path);
 		if (lid_open!=lid.is_open) {
 			lid.is_open = lid_open;
 			if (state) *state = lid_open;
@@ -244,15 +361,18 @@ static void checkForGamepad(void) {
 }
 
 void PLAT_initInput(void) {
-	inputs[0] = openInputByName("axp20x-pek");
-	if (inputs[0] < 0)
-		inputs[0] = openInputByName("adc-keys");
-	inputs[kRawIndex] = openInputByName("gpio-keys-gamepad");
-	if (inputs[kRawIndex] < 0)
-		inputs[kRawIndex] = openInputByName("gpio-keys-control");
-	inputs[kVolumeIndex] = openInputByName("gpio-keys-volume");
-	if (inputs[kVolumeIndex] < 0)
-		inputs[kVolumeIndex] = openInputByName("gpio-keys-vol");
+	inputs[0] = openInputByName(trait_input_power);
+	if (inputs[0] < 0) inputs[0] = openInputByName("axp20x-pek");
+	if (inputs[0] < 0) inputs[0] = openInputByName("adc-keys");
+
+	inputs[kRawIndex] = openInputByName(trait_input_gamepad);
+	if (inputs[kRawIndex] < 0) inputs[kRawIndex] = openInputByName("gpio-keys-gamepad");
+	if (inputs[kRawIndex] < 0) inputs[kRawIndex] = openInputByName("gpio-keys-control");
+
+	inputs[kVolumeIndex] = openInputByName(trait_input_volume);
+	if (inputs[kVolumeIndex] < 0) inputs[kVolumeIndex] = openInputByName("gpio-keys-volume");
+	if (inputs[kVolumeIndex] < 0) inputs[kVolumeIndex] = openInputByName("gpio-keys-vol");
+
 	inputs[kPadIndex] = -1; 
 	local_pad_pressed = 0;
 	gamepad_pad_pressed = 0;
@@ -365,28 +485,28 @@ void PLAT_pollInput(void) {
 					}
 				}
 				else {
-						 if (code==RAW_UP) 		{ btn = BTN_DPAD_UP; 	id = BTN_ID_DPAD_UP; }
-		 			else if (code==RAW_DOWN)	{ btn = BTN_DPAD_DOWN; 	id = BTN_ID_DPAD_DOWN; }
-					else if (code==RAW_LEFT)	{ btn = BTN_DPAD_LEFT; 	id = BTN_ID_DPAD_LEFT; }
-					else if (code==RAW_RIGHT)	{ btn = BTN_DPAD_RIGHT; id = BTN_ID_DPAD_RIGHT; }
-					else if (code==RAW_A)		{ btn = BTN_A; 			id = BTN_ID_A; }
-					else if (code==RAW_B)		{ btn = BTN_B; 			id = BTN_ID_B; }
-					else if (code==RAW_X)		{ btn = BTN_X; 			id = BTN_ID_X; }
-					else if (code==RAW_Y)		{ btn = BTN_Y; 			id = BTN_ID_Y; }
-					else if (code==RAW_START)	{ btn = BTN_START; 		id = BTN_ID_START; }
-					else if (code==RAW_SELECT)	{ btn = BTN_SELECT; 	id = BTN_ID_SELECT; }
-					else if (code==RAW_MENU)	{ btn = BTN_MENU; 		id = BTN_ID_MENU; }
-					else if (code==RAW_MENU1)	{ btn = BTN_MENU; 		id = BTN_ID_MENU; }
-					else if (code==RAW_MENU2)	{ btn = BTN_MENU; 		id = BTN_ID_MENU; }
-					else if (code==RAW_L1)		{ btn = BTN_L1; 		id = BTN_ID_L1; }
-					else if (code==RAW_L2)		{ btn = BTN_L2; 		id = BTN_ID_L2; }
-					else if (code==RAW_L3)		{ btn = BTN_L3; 		id = BTN_ID_L3; }
-					else if (code==RAW_R1)		{ btn = BTN_R1; 		id = BTN_ID_R1; }
-					else if (code==RAW_R2)		{ btn = BTN_R2; 		id = BTN_ID_R2; }
-					else if (code==RAW_R3)		{ btn = BTN_R3; 		id = BTN_ID_R3; }
-					else if (code==RAW_PLUS)	{ btn = BTN_PLUS; 		id = BTN_ID_PLUS; }
-					else if (code==RAW_MINUS)	{ btn = BTN_MINUS; 		id = BTN_ID_MINUS; }
-					else if (code==RAW_POWER)	{ btn = BTN_POWER; 		id = BTN_ID_POWER; }
+						 if (code==k_up) 		{ btn = BTN_DPAD_UP; 	id = BTN_ID_DPAD_UP; }
+		 			else if (code==k_down)	{ btn = BTN_DPAD_DOWN; 	id = BTN_ID_DPAD_DOWN; }
+					else if (code==k_left)	{ btn = BTN_DPAD_LEFT; 	id = BTN_ID_DPAD_LEFT; }
+					else if (code==k_right)	{ btn = BTN_DPAD_RIGHT; id = BTN_ID_DPAD_RIGHT; }
+					else if (code==k_a)		{ btn = BTN_A; 			id = BTN_ID_A; }
+					else if (code==k_b)		{ btn = BTN_B; 			id = BTN_ID_B; }
+					else if (code==k_x)		{ btn = BTN_X; 			id = BTN_ID_X; }
+					else if (code==k_y)		{ btn = BTN_Y; 			id = BTN_ID_Y; }
+					else if (code==k_c)		{ btn = BTN_R1; 		id = BTN_ID_R1; }
+					else if (code==k_z)		{ btn = BTN_R2; 		id = BTN_ID_R2; }
+					else if (code==k_start)	{ btn = BTN_START; 		id = BTN_ID_START; }
+					else if (code==k_select)	{ btn = BTN_SELECT; 	id = BTN_ID_SELECT; }
+					else if (code==k_menu)	{ btn = BTN_MENU; 		id = BTN_ID_MENU; }
+					else if (code==k_l1)		{ btn = BTN_L1; 		id = BTN_ID_L1; }
+					else if (code==k_l2)		{ btn = BTN_L2; 		id = BTN_ID_L2; }
+					else if (code==k_l3)		{ btn = BTN_L3; 		id = BTN_ID_L3; }
+					else if (code==k_r1)		{ btn = BTN_R1; 		id = BTN_ID_R1; }
+					else if (code==k_r2)		{ btn = BTN_R2; 		id = BTN_ID_R2; }
+					else if (code==k_r3)		{ btn = BTN_R3; 		id = BTN_ID_R3; }
+					else if (code==k_vol_up)	{ btn = BTN_PLUS; 		id = BTN_ID_PLUS; }
+					else if (code==k_vol_down)	{ btn = BTN_MINUS; 		id = BTN_ID_MINUS; }
+					else if (code==k_power)	{ btn = BTN_POWER; 		id = BTN_ID_POWER; }
 				}
 
 				if (btn != BTN_NONE) {
@@ -481,7 +601,7 @@ int PLAT_shouldWake(void) {
 	for (int i=0; i<INPUT_COUNT; i++) {
 		input = inputs[i];
 		while (read(input, &event, sizeof(event))==sizeof(event)) {
-			if (event.type==EV_KEY && event.code==RAW_POWER && event.value==0) {
+			if (event.type==EV_KEY && event.code==k_power && event.value==0) {
 				// ignore input while lid is closed
 				if (lid.has_lid && !lid.is_open) return 0;  // do it here so we eat the input
 				return 1;
@@ -529,7 +649,6 @@ static struct VID_Context {
 static int device_width;
 static int device_height;
 static int device_pitch;
-static int rotate = 0;
 
 static int PLAT_initDirectFB(void)
 {
@@ -748,11 +867,7 @@ static void PLAT_blitRendererDirectFB(const GFX_Renderer *renderer)
 }
 
 SDL_Surface* PLAT_initVideo(void) {
-	// LOG_info("PLAT_initVideo\n");
-	
-	char* model = getenv("RGXX_MODEL"); // TODO: use device?
-	is_cubexx = exactMatch("RGcubexx", model);
-	is_rg34xx = model && prefixMatch("RG34xx", model);
+	load_traits();
 	
 	// SDL_version compiled;
 	// SDL_version linked;
@@ -1255,22 +1370,44 @@ static int getOCVCapacity(int voltage_uv) {
 	return capacity;
 }
 void PLAT_getBatteryStatus(int* is_charging, int* charge) {
-	int i;
+	int i = -1;
 
 	if (!is_charging || !charge)
 		return;
 
-	if (exists("/sys/class/power_supply/rk817-charger/online"))
-		*is_charging = getInt("/sys/class/power_supply/rk817-charger/online");
-	else
-		*is_charging = getInt("/sys/class/power_supply/axp20x-usb/online");
+	if (strlen(trait_charger_online_path) > 0 && exists(trait_charger_online_path)) {
+		*is_charging = getInt(trait_charger_online_path);
+	}
+	else if (strlen(trait_battery_capacity_path) > 0) {
+		char status_path[256];
+		char status_str[32] = "";
+		snprintf(status_path, sizeof(status_path), "%s/status", trait_battery_capacity_path);
+		if (exists(status_path)) {
+			getFile(status_path, status_str, sizeof(status_str));
+			*is_charging = (prefixMatch("Charging", status_str) || prefixMatch("Full", status_str));
+		} else {
+			*is_charging = 0;
+		}
+	} else {
+		*is_charging = 0;
+	}
 
-	if (exists("/sys/class/power_supply/battery/capacity"))
-		i = getInt("/sys/class/power_supply/battery/capacity");
-	else
-		i = getInt("/sys/class/power_supply/axp20x-battery/capacity");
-	if (i<=0 && exists("/sys/class/power_supply/battery/voltage_avg"))
-		i = getOCVCapacity(getInt("/sys/class/power_supply/battery/voltage_avg"));
+	if (strlen(trait_battery_capacity_path) > 0) {
+		char cap_path[256];
+		snprintf(cap_path, sizeof(cap_path), "%s/capacity", trait_battery_capacity_path);
+		if (exists(cap_path)) {
+			i = getInt(cap_path);
+		}
+	}
+
+	if (i <= 0 && strlen(trait_battery_capacity_path) > 0) {
+		char volt_path[256];
+		snprintf(volt_path, sizeof(volt_path), "%s/voltage_avg", trait_battery_capacity_path);
+		if (exists(volt_path)) {
+			i = getOCVCapacity(getInt(volt_path));
+		}
+	}
+
 	// worry less about battery and more about the game you're playing
 	     if (i>80) *charge = 100;
 	else if (i>60) *charge =  80;
@@ -1285,17 +1422,16 @@ void PLAT_getBatteryStatus(int* is_charging, int* charge) {
 	online = prefixMatch("up", status);
 }
 
-#define LED_PATH "/sys/class/power_supply/axp2202-battery/work_led"
 void PLAT_enableBacklight(int enable) {
 	if (enable) {
 		putInt(BLANK_PATH, FB_BLANK_UNBLANK); // wake
 		SetBrightness(GetBrightness());
-		putInt(LED_PATH,0);
+		if (strlen(trait_power_led_path) > 0) putInt(trait_power_led_path, 0);
 	}
 	else {
 		putInt(BLANK_PATH, FB_BLANK_POWERDOWN); // sleep
 		SetRawBrightness(0);
-		putInt(LED_PATH,1);
+		if (strlen(trait_power_led_path) > 0) putInt(trait_power_led_path, 1);
 	}
 }
 
@@ -1305,19 +1441,16 @@ void PLAT_powerOff(void) {
 
 	SetRawVolume(MUTE_VOLUME_RAW);
 	PLAT_enableBacklight(0);
-	system("echo 1 > /sys/class/power_supply/axp2202-battery/work_led");
+	if (strlen(trait_power_led_path) > 0) {
+		char cmd[256];
+		snprintf(cmd, sizeof(cmd), "echo 1 > %s", trait_power_led_path);
+		system(cmd);
+	}
 	SND_quit();
 	VIB_quit();
 	PWR_quit();
 	GFX_quit();
 
-	// system("cat /dev/zero > /dev/fb0 2>/dev/null");
-	// system("shutdown");
-	// while (1) pause(); // lolwat
-	
-	// touch("/tmp/poweroff");
-	// sync();
-	// system("touch /tmp/poweroff && sync");
 	exit(0);
 }
 
@@ -1327,10 +1460,9 @@ void PLAT_setCPUSpeed(int speed) {
 	// TODO: why wasn't this ever implemented?
 }
 
-#define RUMBLE_PATH "/sys/class/power_supply/axp2202-battery/moto"
 void PLAT_setRumble(int strength) {
 	if (GetHDMI()) return; // assume we're using a controller?
-	putInt(RUMBLE_PATH, strength?1:0);
+	if (strlen(trait_rumble_path) > 0) putInt(trait_rumble_path, strength?1:0);
 }
 
 int PLAT_pickSampleRate(int requested, int max) {
@@ -1339,17 +1471,8 @@ int PLAT_pickSampleRate(int requested, int max) {
 
 static char model[256];
 char* PLAT_getModel(void) {
-	// firmware "strings /mnt/vendor/bin/dmenu.bin | grep ^20"
-	char* _model = getenv("RGXX_MODEL");
-	if (_model!=NULL) {
-		if (exactMatch(_model,"RGcubexx")) _model = "RG CubeXX";
-		
-		sprintf(model, "Anbernic %s", _model);
-		char* tmp = strrchr(model, '_');
-		if (tmp) *tmp = '\0';
-		return model;
-	}
-	return "Anbernic RG*XX";
+	if (strlen(plat_device_model) > 0) return plat_device_model;
+	return "Minime Handheld";
 }
 
 int PLAT_isOnline(void) {

@@ -9,8 +9,12 @@
 
 ///////////////////////////////
 
-extern int is_cubexx;
-extern int is_rg34xx;
+extern int plat_fixed_width;
+extern int plat_fixed_height;
+extern int plat_has_hdmi;
+extern int plat_main_row_count;
+extern int plat_padding;
+extern int plat_screen_rotation;
 extern int on_hdmi;
 
 ///////////////////////////////
@@ -108,8 +112,8 @@ extern int on_hdmi;
 ///////////////////////////////
 
 #define FIXED_SCALE 	2
-#define FIXED_WIDTH		(is_cubexx?720:(is_rg34xx?720:640))
-#define FIXED_HEIGHT	(is_cubexx?720:480)
+#define FIXED_WIDTH		plat_fixed_width
+#define FIXED_HEIGHT	plat_fixed_height
 #define FIXED_BPP		2
 #define FIXED_DEPTH		(FIXED_BPP * 8)
 #define FIXED_PITCH		(FIXED_WIDTH * FIXED_BPP)
@@ -117,7 +121,7 @@ extern int on_hdmi;
 
 ///////////////////////////////
 
-#define HAS_HDMI	1
+#define HAS_HDMI	plat_has_hdmi
 #define HDMI_WIDTH 	1280
 #define HDMI_HEIGHT 720
 #define HDMI_PITCH 	(HDMI_WIDTH * FIXED_BPP)
@@ -128,8 +132,8 @@ extern int on_hdmi;
 
 ///////////////////////////////
 
-#define MAIN_ROW_COUNT (is_cubexx||on_hdmi?8:6)
-#define PADDING (is_cubexx||on_hdmi?40:10)
+#define MAIN_ROW_COUNT (plat_main_row_count + (on_hdmi ? 2 : 0))
+#define PADDING (on_hdmi ? 40 : plat_padding)
 
 ///////////////////////////////
 
@@ -143,3 +147,4 @@ extern int on_hdmi;
 ///////////////////////////////
 
 #endif
+
