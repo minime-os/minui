@@ -804,10 +804,18 @@ SDL_Surface* PLAT_initVideo(void) {
 		}
 	}
 	
-	SDL_InitSubSystem(SDL_INIT_VIDEO);
+	if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
+		LOG_error("SDL video init failed: %s\n", SDL_GetError());
+		exit(1);
+	}
+	LOG_info("SDL video driver: %s\n", SDL_GetCurrentVideoDriver());
 	SDL_ShowCursor(0);
 	
 	vid.window   = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, w,h, SDL_WINDOW_SHOWN);
+	if (!vid.window) {
+		LOG_error("SDL window creation failed: %s\n", SDL_GetError());
+		exit(1);
+	}
 	// LOG_info("window size: %ix%i\n", w,h);
 	
 	SDL_DisplayMode mode;
@@ -815,6 +823,13 @@ SDL_Surface* PLAT_initVideo(void) {
 	LOG_info("Current display mode: %ix%i (%s)\n", mode.w,mode.h, SDL_GetPixelFormatName(mode.format));
 	if (mode.h>mode.w) rotate = 3; // no longer set on 28xx (because of SDL2 rotation patch?)
 	vid.renderer = SDL_CreateRenderer(vid.window,-1,SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);
+	if (!vid.renderer) {
+		LOG_error("SDL renderer creation failed: %s\n", SDL_GetError());
+		exit(1);
+	}
+	SDL_RendererInfo info;
+	if (SDL_GetRendererInfo(vid.renderer, &info) == 0)
+		LOG_info("SDL render driver: %s\n", info.name);
 	// SDL_RenderSetLogicalSize(vid.renderer, w,h); // TODO: wrong, but without and with the below it's even wrong-er
 	
 	// int renderer_width,renderer_height;
@@ -844,6 +859,10 @@ SDL_Surface* PLAT_initVideo(void) {
 	
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"1"); // linear
 	vid.texture = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGB565, SDL_TEXTUREACCESS_STREAMING, w,h);
+	if (!vid.texture) {
+		LOG_error("SDL texture creation failed: %s\n", SDL_GetError());
+		exit(1);
+	}
 	vid.target	= NULL; // only needed for non-native sizes
 	
 	// TODO: doesn't work here

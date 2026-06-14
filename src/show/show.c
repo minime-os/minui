@@ -21,13 +21,21 @@ int main(int argc , char* argv[]) {
 	
 	int delay = argc>2 ? atoi(argv[2]) : 2;
 	
-	SDL_Init(SDL_INIT_VIDEO);
+	if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+		fprintf(stderr, "SDL video init failed: %s\n", SDL_GetError());
+		return 1;
+	}
+	fprintf(stderr, "SDL video driver: %s\n", SDL_GetCurrentVideoDriver());
 	SDL_ShowCursor(0);
 	
 	int w = 0;
 	int h = 0;
 	int p = 0;
 	SDL_Window* window = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, w,h, SDL_WINDOW_SHOWN);
+	if (!window) {
+		fprintf(stderr, "SDL window creation failed: %s\n", SDL_GetError());
+		return 1;
+	}
 	
 	int rotate = 0;
 	SDL_DisplayMode mode;
@@ -38,7 +46,18 @@ int main(int argc , char* argv[]) {
 	p = mode.w * FIXED_BPP;
 	
 	SDL_Renderer* renderer = SDL_CreateRenderer(window,-1,SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);
+	if (!renderer) {
+		fprintf(stderr, "SDL renderer creation failed: %s\n", SDL_GetError());
+		return 1;
+	}
+	SDL_RendererInfo info;
+	if (SDL_GetRendererInfo(renderer, &info) == 0)
+		fprintf(stderr, "SDL render driver: %s\n", info.name);
 	SDL_Texture* texture = SDL_CreateTexture(renderer,SDL_PIXELFORMAT_RGB565, SDL_TEXTUREACCESS_STREAMING, w,h);
+	if (!texture) {
+		fprintf(stderr, "SDL texture creation failed: %s\n", SDL_GetError());
+		return 1;
+	}
 	SDL_Surface* screen = SDL_CreateRGBSurfaceFrom(NULL, w,h, FIXED_DEPTH, p, RGBA_MASK_565);
 	
 	SDL_LockTexture(texture,NULL,&screen->pixels,&screen->pitch);
