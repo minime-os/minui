@@ -245,8 +245,14 @@ static void checkForGamepad(void) {
 
 void PLAT_initInput(void) {
 	inputs[0] = openInputByName("axp20x-pek");
+	if (inputs[0] < 0)
+		inputs[0] = openInputByName("adc-keys");
 	inputs[kRawIndex] = openInputByName("gpio-keys-gamepad");
+	if (inputs[kRawIndex] < 0)
+		inputs[kRawIndex] = openInputByName("gpio-keys-control");
 	inputs[kVolumeIndex] = openInputByName("gpio-keys-volume");
+	if (inputs[kVolumeIndex] < 0)
+		inputs[kVolumeIndex] = openInputByName("gpio-keys-vol");
 	inputs[kPadIndex] = -1; 
 	local_pad_pressed = 0;
 	gamepad_pad_pressed = 0;
@@ -1238,9 +1244,15 @@ void PLAT_getBatteryStatus(int* is_charging, int* charge) {
 	if (!is_charging || !charge)
 		return;
 
-	*is_charging = getInt("/sys/class/power_supply/axp20x-usb/online");
+	if (exists("/sys/class/power_supply/rk817-charger/online"))
+		*is_charging = getInt("/sys/class/power_supply/rk817-charger/online");
+	else
+		*is_charging = getInt("/sys/class/power_supply/axp20x-usb/online");
 
-	i = getInt("/sys/class/power_supply/axp20x-battery/capacity");
+	if (exists("/sys/class/power_supply/battery/capacity"))
+		i = getInt("/sys/class/power_supply/battery/capacity");
+	else
+		i = getInt("/sys/class/power_supply/axp20x-battery/capacity");
 	// worry less about battery and more about the game you're playing
 	     if (i>80) *charge = 100;
 	else if (i>60) *charge =  80;

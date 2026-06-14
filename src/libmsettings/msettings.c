@@ -155,8 +155,17 @@ void SetRawBrightness(int val) { // 0 - 255
 	if (settings->hdmi) return;
 	
 	printf("SetRawBrightness(%i)\n", val); fflush(stdout);
-    int fd = open("/dev/disp", O_RDWR);
-	if (fd) {
+	int fd = open("/sys/class/backlight/backlight/brightness", O_WRONLY);
+	if (fd >= 0) {
+		char value[16];
+		int len = snprintf(value, sizeof(value), "%i\n", val);
+		write(fd, value, len);
+		close(fd);
+		return;
+	}
+
+	fd = open("/dev/disp", O_RDWR);
+	if (fd >= 0) {
 	    unsigned long param[4]={0,val,0,0};
 		ioctl(fd, DISP_LCD_SET_BRIGHTNESS, &param);
 		close(fd);
