@@ -73,15 +73,25 @@ int main(int argc , char* argv[]) {
 	}
 	fprintf(stderr, "SDL screen surface created\n");
 	SDL_FillRect(screen, NULL, 0);
+	fprintf(stderr, "SDL screen cleared\n");
 	SDL_Surface* img = IMG_Load(path);
+	if (!img) {
+		fprintf(stderr, "SDL image load failed: %s\n", IMG_GetError());
+		return 1;
+	}
+	fprintf(stderr, "SDL image loaded: %ix%i\n", img->w,img->h);
 	SDL_BlitSurface(img, NULL, screen, &(SDL_Rect){(screen->w-img->w)/2,(screen->h-img->h)/2});
+	fprintf(stderr, "SDL image blitted\n");
 	SDL_FreeSurface(img);
 	SDL_FreeSurface(screen);
 	SDL_UnlockTexture(texture);
+	fprintf(stderr, "SDL texture unlocked\n");
 
 	if (rotate) SDL_RenderCopyEx(renderer,texture,NULL,&(SDL_Rect){0,w,w,h},rotate*90,&(SDL_Point){0,0},SDL_FLIP_NONE);
 	else SDL_RenderCopy(renderer, texture, NULL,NULL);
+	fprintf(stderr, "SDL texture copied\n");
 	SDL_RenderPresent(renderer);
+	fprintf(stderr, "SDL frame presented\n");
 	
 	sleep(delay);
 	

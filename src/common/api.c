@@ -244,6 +244,7 @@ SDL_Surface* GFX_init(int mode) {
 	RGB_LIGHT_GRAY	= SDL_MapRGB(gfx.screen->format, TRIAD_LIGHT_GRAY);
 	RGB_GRAY		= SDL_MapRGB(gfx.screen->format, TRIAD_GRAY);
 	RGB_DARK_GRAY	= SDL_MapRGB(gfx.screen->format, TRIAD_DARK_GRAY);
+	LOG_info("UI colors initialized\n");
 	
 	asset_rgbs[ASSET_WHITE_PILL]	= RGB_WHITE;
 	asset_rgbs[ASSET_BLACK_PILL]	= RGB_BLACK;
@@ -288,14 +289,26 @@ SDL_Surface* GFX_init(int mode) {
 	
 	char asset_path[MAX_PATH];
 	sprintf(asset_path, RES_PATH "/assets@%ix.png", FIXED_SCALE);
-	if (!exists(asset_path)) LOG_info("missing assets, you're about to segfault dummy!\n");
+	LOG_info("Loading UI assets: %s\n", asset_path);
 	gfx.assets = IMG_Load(asset_path);
+	if (!gfx.assets) {
+		LOG_error("UI asset load failed: %s\n", IMG_GetError());
+		exit(1);
+	}
 	
-	TTF_Init();
+	if (TTF_Init() != 0) {
+		LOG_error("TTF initialization failed: %s\n", TTF_GetError());
+		exit(1);
+	}
 	font.large 	= TTF_OpenFont(FONT_PATH, SCALE1(FONT_LARGE));
 	font.medium = TTF_OpenFont(FONT_PATH, SCALE1(FONT_MEDIUM));
 	font.small 	= TTF_OpenFont(FONT_PATH, SCALE1(FONT_SMALL));
 	font.tiny 	= TTF_OpenFont(FONT_PATH, SCALE1(FONT_TINY));
+	if (!font.large || !font.medium || !font.small || !font.tiny) {
+		LOG_error("UI font load failed: %s\n", TTF_GetError());
+		exit(1);
+	}
+	LOG_info("UI assets and fonts loaded\n");
 	
 	TTF_SetFontStyle(font.large, TTF_STYLE_BOLD);
 	TTF_SetFontStyle(font.medium, TTF_STYLE_BOLD);
