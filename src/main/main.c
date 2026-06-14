@@ -3,6 +3,7 @@
 #include <string.h>
 #include <msettings.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <dirent.h>
 #include <ctype.h>
 #include <unistd.h>
@@ -569,7 +570,9 @@ static int hasRecents(void) {
 		unlink(CHANGE_DISC_PATH);
 	}
 	
-	FILE* file = fopen(RECENT_PATH, "r"); // newest at top
+	struct stat recent_stat;
+	FILE* file = stat(RECENT_PATH, &recent_stat)==0 && recent_stat.st_size>0
+		? fopen(RECENT_PATH, "r") : NULL; // newest at top
 	if (file) {
 		char line[256];
 		while (fgets(line,256,file)!=NULL) {

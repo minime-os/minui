@@ -175,7 +175,7 @@ void SetRawVolume(int val) { // 0 - 100
 	printf("SetRawVolume(%i)\n", val); fflush(stdout);
 	char cmd[256];
 	snprintf(cmd, sizeof(cmd),
-		"amixer -q -c rk817ext sset 'Master Playback Volume' %i%% "
+		"amixer -q -c rk817ext sset Master %i%% "
 		"> /dev/null 2>&1 || amixer -q sset 'lineout volume' %i%% "
 		"> /dev/null 2>&1", val, val);
 	// // puts(cmd); fflush(stdout);
