@@ -58,13 +58,21 @@ int main(int argc , char* argv[]) {
 		fprintf(stderr, "SDL texture creation failed: %s\n", SDL_GetError());
 		return 1;
 	}
-	SDL_Surface* screen = SDL_CreateRGBSurfaceFrom(NULL, w,h, FIXED_DEPTH, p, RGBA_MASK_565);
-	
-	SDL_LockTexture(texture,NULL,&screen->pixels,&screen->pitch);
+	void* pixels;
+	if (SDL_LockTexture(texture, NULL, &pixels, &p) != 0) {
+		fprintf(stderr, "SDL texture lock failed: %s\n", SDL_GetError());
+		return 1;
+	}
+	SDL_Surface* screen = SDL_CreateRGBSurfaceFrom(pixels, w,h, FIXED_DEPTH, p, RGBA_MASK_565);
+	if (!screen) {
+		fprintf(stderr, "SDL screen surface creation failed: %s\n", SDL_GetError());
+		return 1;
+	}
 	SDL_FillRect(screen, NULL, 0);
 	SDL_Surface* img = IMG_Load(path);
 	SDL_BlitSurface(img, NULL, screen, &(SDL_Rect){(screen->w-img->w)/2,(screen->h-img->h)/2});
 	SDL_FreeSurface(img);
+	SDL_FreeSurface(screen);
 	SDL_UnlockTexture(texture);
 
 	if (rotate) SDL_RenderCopyEx(renderer,texture,NULL,&(SDL_Rect){0,w,w,h},rotate*90,&(SDL_Point){0,0},SDL_FLIP_NONE);
@@ -73,7 +81,6 @@ int main(int argc , char* argv[]) {
 	
 	sleep(delay);
 	
-	SDL_FreeSurface(screen);
 	SDL_DestroyTexture(texture);
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);

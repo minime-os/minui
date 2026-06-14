@@ -499,7 +499,6 @@ static struct VID_Context {
 	SDL_Texture* target;
 	SDL_Texture* effect;
 
-	SDL_Surface* buffer;
 	SDL_Surface* screen;
 	
 	GFX_Renderer* blit; // yeesh
@@ -877,8 +876,11 @@ SDL_Surface* PLAT_initVideo(void) {
 	// SDL_QueryTexture(vid.texture, &format, &access_, NULL,NULL);
 	// LOG_info("texture format: %s (streaming: %i)\n", SDL_GetPixelFormatName(format), access_==SDL_TEXTUREACCESS_STREAMING);
 	
-	vid.buffer	= SDL_CreateRGBSurfaceFrom(NULL, w,h, FIXED_DEPTH, p, RGBA_MASK_565);
 	vid.screen	= SDL_CreateRGBSurface(SDL_SWSURFACE, w,h, FIXED_DEPTH, RGBA_MASK_565);
+	if (!vid.screen) {
+		LOG_error("SDL screen surface creation failed: %s\n", SDL_GetError());
+		exit(1);
+	}
 	vid.width	= w;
 	vid.height	= h;
 	vid.pitch	= p;
@@ -904,7 +906,6 @@ void PLAT_quitVideo(void) {
 	// clearVideo();
 
 	SDL_FreeSurface(vid.screen);
-	SDL_FreeSurface(vid.buffer);
 	if (vid.target) SDL_DestroyTexture(vid.target);
 	if (vid.effect) SDL_DestroyTexture(vid.effect);
 	SDL_DestroyTexture(vid.texture);
@@ -941,7 +942,6 @@ static void resizeVideo(int w, int h, int p) {
 
 	LOG_info("resizeVideo(%i,%i,%i) hard_scale: %i crisp: %i\n",w,h,p, hard_scale,vid.sharpness==SHARPNESS_CRISP);
 
-	SDL_FreeSurface(vid.buffer);
 	SDL_DestroyTexture(vid.texture);
 	if (vid.target) SDL_DestroyTexture(vid.target);
 	
@@ -955,8 +955,6 @@ static void resizeVideo(int w, int h, int p) {
 	else {
 		vid.target = NULL;
 	}
-
-	vid.buffer	= SDL_CreateRGBSurfaceFrom(NULL, w,h, FIXED_DEPTH, p, RGBA_MASK_565);
 
 	vid.width	= w;
 	vid.height	= h;
@@ -1157,7 +1155,7 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
 	
 	// uint32_t then = SDL_GetTicks();
 	SDL_UpdateTexture(vid.texture,NULL,vid.blit->src,vid.blit->src_p);
-	// LOG_info("blit blocked for %ims (%i,%i)\n", SDL_GetTicks()-then,vid.buffer->w,vid.buffer->h);
+	// LOG_info("blit blocked for %ims\n", SDL_GetTicks()-then);
 	
 	SDL_Texture* target = vid.texture;
 	int x = vid.blit->src_x;
