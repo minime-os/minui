@@ -240,6 +240,7 @@ static void getUniqueName(Entry* entry, char* out_name) {
 }
 
 static void Directory_index(Directory* self) {
+	LOG_info("Directory_index start: %s\n", self->path);
 	int is_collection = prefixMatch(COLLECTIONS_PATH, self->path);
 	int skip_index = exactMatch(FAUX_RECENT_PATH, self->path) || is_collection; // not alphabetized
 	
@@ -347,6 +348,7 @@ static void Directory_index(Directory* self) {
 	}
 	
 	if (map) Hash_free(map);
+	LOG_info("Directory_index end\n");
 }
 
 static Array* getRoot(void);
@@ -677,6 +679,7 @@ static int hasRoms(char* dir_name) {
 	return has;
 }
 static Array* getRoot(void) {
+	LOG_info("getRoot start\n");
 	Array* root = Array_new();
 	
 	if (hasRecents()) Array_push(root, Entry_new(FAUX_RECENT_PATH, ENTRY_DIR));
@@ -786,6 +789,7 @@ static Array* getRoot(void) {
 	}
 	Array_free(entries); // root now owns entries' entries
 	
+	LOG_info("getRoot end\n");
 	return root;
 }
 static Array* getRecents(void) {

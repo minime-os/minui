@@ -261,6 +261,7 @@ void SETTINGS_WIFI_BACKEND_quit(void) {
 }
 
 int SETTINGS_WIFI_BACKEND_refresh(struct settings_snapshot *snapshot) {
+	printf("[INFO] SETTINGS_WIFI_BACKEND_refresh start\n"); fflush(stdout);
 	if (!snapshot) return -1;
 	
 	wifi_enabled = is_wifi_interface_present() && is_wifi_interface_up();
@@ -293,6 +294,7 @@ int SETTINGS_WIFI_BACKEND_refresh(struct settings_snapshot *snapshot) {
 		snapshot->wifi_network_count = 0;
 	}
 	
+	printf("[INFO] SETTINGS_WIFI_BACKEND_refresh end\n"); fflush(stdout);
 	return 0;
 }
 
