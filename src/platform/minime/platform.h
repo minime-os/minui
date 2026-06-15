@@ -1,5 +1,3 @@
-// rg35xxplus/platform/platform.h
-
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
@@ -16,6 +14,8 @@ extern int plat_main_row_count;
 extern int plat_padding;
 extern int plat_screen_rotation;
 extern int on_hdmi;
+const char *PLAT_getDeviceId(void);
+int PLAT_hasButtonCZ(void);
 
 ///////////////////////////////
 
@@ -29,8 +29,10 @@ extern int on_hdmi;
 
 #define	BUTTON_A		BUTTON_NA
 #define	BUTTON_B		BUTTON_NA
+#define	BUTTON_C		BUTTON_NA
 #define	BUTTON_X		BUTTON_NA
 #define	BUTTON_Y		BUTTON_NA
+#define	BUTTON_Z		BUTTON_NA
 
 #define	BUTTON_L1		BUTTON_NA
 #define	BUTTON_R1		BUTTON_NA
@@ -56,8 +58,10 @@ extern int on_hdmi;
 
 #define CODE_A			CODE_NA
 #define CODE_B			CODE_NA
+#define CODE_C			CODE_NA
 #define CODE_X			CODE_NA
 #define CODE_Y			CODE_NA
+#define CODE_Z			CODE_NA
 
 #define CODE_L1			CODE_NA
 #define CODE_R1			CODE_NA
@@ -84,8 +88,10 @@ extern int on_hdmi;
 
 #define JOY_A			0
 #define JOY_B			1
+#define JOY_C			JOY_NA
 #define JOY_X			3
 #define JOY_Y			2
+#define JOY_Z			JOY_NA
 
 #define JOY_L1			4
 #define JOY_R1			5
@@ -147,4 +153,3 @@ extern int on_hdmi;
 ///////////////////////////////
 
 #endif
-

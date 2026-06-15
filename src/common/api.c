@@ -244,7 +244,6 @@ SDL_Surface* GFX_init(int mode) {
 	RGB_LIGHT_GRAY	= SDL_MapRGB(gfx.screen->format, TRIAD_LIGHT_GRAY);
 	RGB_GRAY		= SDL_MapRGB(gfx.screen->format, TRIAD_GRAY);
 	RGB_DARK_GRAY	= SDL_MapRGB(gfx.screen->format, TRIAD_DARK_GRAY);
-	LOG_info("UI colors initialized\n");
 	
 	asset_rgbs[ASSET_WHITE_PILL]	= RGB_WHITE;
 	asset_rgbs[ASSET_BLACK_PILL]	= RGB_BLACK;
@@ -289,7 +288,6 @@ SDL_Surface* GFX_init(int mode) {
 	
 	char asset_path[MAX_PATH];
 	sprintf(asset_path, RES_PATH "/assets@%ix.png", FIXED_SCALE);
-	LOG_info("Loading UI assets: %s\n", asset_path);
 	gfx.assets = IMG_Load(asset_path);
 	if (!gfx.assets) {
 		LOG_error("UI asset load failed: %s\n", IMG_GetError());
@@ -308,7 +306,6 @@ SDL_Surface* GFX_init(int mode) {
 		LOG_error("UI font load failed: %s\n", TTF_GetError());
 		exit(1);
 	}
-	LOG_info("UI assets and fonts loaded\n");
 	
 	TTF_SetFontStyle(font.large, TTF_STYLE_BOLD);
 	TTF_SetFontStyle(font.medium, TTF_STYLE_BOLD);

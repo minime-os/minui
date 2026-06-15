@@ -160,7 +160,9 @@ void Menu_beforeSleep(void)
 	SRAM_write();
 	RTC_write();
 	State_autosave();
-	putFile(AUTO_RESUME_PATH, game.path + strlen(SDCARD_PATH));
+	putFile(AUTO_RESUME_PATH,
+		(game.bundle_path[0] ? game.bundle_path : game.path) +
+		strlen(SDCARD_PATH));
 	PWR_setCPUSpeed(CPU_SPEED_MENU);
 }
 

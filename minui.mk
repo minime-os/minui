@@ -17,8 +17,8 @@ MINUI_RUNTIME_RPATH = -Wl,-rpath,$(MINUI_LIB_DIR)
 MINUI_SRC_DIR = $(@D)/src
 MINUI_ASSETS_DIR = $(@D)/assets
 MINUI_BUILD_DIR = $(@D)/build-minui
-MINUI_PLATFORM_DIR = $(MINUI_SRC_DIR)/platform/rg35xxplus
-MINUI_PLATFORM_NAME = rg35xxplus
+MINUI_PLATFORM_DIR = $(MINUI_SRC_DIR)/platform/minime
+MINUI_PLATFORM_NAME = minime
 MINUI_TIMEZONE_SRC = $(MINUI_ASSETS_DIR)/timezones/minui.tzs
 MINUI_ZIC = $(shell command -v zic 2>/dev/null || echo /usr/sbin/zic)
 MINUI_BUILD_DATE = $(shell date +%Y.%m.%d)
@@ -34,16 +34,34 @@ define MINUI_BUILD_CMDS
 	mkdir -p $(MINUI_BUILD_DIR)
 	$(TARGET_CC) $(TARGET_CFLAGS) -fPIC \
 		-I$(MINUI_SRC_DIR)/libmsettings \
+		-I$(MINUI_PLATFORM_DIR) \
 		-c $(MINUI_SRC_DIR)/libmsettings/msettings.c \
 		-o $(MINUI_BUILD_DIR)/msettings.o
+	$(TARGET_CC) $(TARGET_CFLAGS) -fPIC -I$(MINUI_PLATFORM_DIR) \
+		-c $(MINUI_PLATFORM_DIR)/traits.c \
+		-o $(MINUI_BUILD_DIR)/traits.o
+	$(TARGET_CC) $(TARGET_CFLAGS) -fPIC -I$(MINUI_PLATFORM_DIR) \
+		-c $(MINUI_PLATFORM_DIR)/audio.c \
+		-o $(MINUI_BUILD_DIR)/audio.o
+	$(TARGET_CC) $(TARGET_CFLAGS) -fPIC -I$(MINUI_PLATFORM_DIR) \
+		-c $(MINUI_PLATFORM_DIR)/video.c \
+		-o $(MINUI_BUILD_DIR)/platform-video.o
+	$(TARGET_CC) $(TARGET_CFLAGS) -fPIC -I$(MINUI_PLATFORM_DIR) \
+		-c $(MINUI_PLATFORM_DIR)/power.c \
+		-o $(MINUI_BUILD_DIR)/power.o
 	$(TARGET_CC) $(TARGET_LDFLAGS) -shared -Wl,-soname,libmsettings.so \
 		-o $(MINUI_BUILD_DIR)/libmsettings.so \
-		$(MINUI_BUILD_DIR)/msettings.o -ldl -lrt
+		$(MINUI_BUILD_DIR)/msettings.o \
+		$(MINUI_BUILD_DIR)/traits.o \
+		$(MINUI_BUILD_DIR)/audio.o \
+		$(MINUI_BUILD_DIR)/platform-video.o \
+		$(MINUI_BUILD_DIR)/power.o -ldl -lrt
 	$(TARGET_CC) $(TARGET_CFLAGS) \
 		-I$(MINUI_SRC_DIR)/common \
 		-I$(MINUI_SRC_DIR)/libmsettings \
 		-I$(MINUI_PLATFORM_DIR) \
 		$(MINUI_SRC_DIR)/keymon/keymon.c \
+		$(MINUI_PLATFORM_DIR)/input.c \
 		-o $(MINUI_BUILD_DIR)/keymon \
 		$(TARGET_LDFLAGS) $(MINUI_RUNTIME_RPATH) -L$(MINUI_BUILD_DIR) -lmsettings -lpthread -lrt -ldl
 	$(TARGET_CC) $(TARGET_CFLAGS) $(MINUI_CPPFLAGS) -fomit-frame-pointer -std=gnu99 \
@@ -68,6 +86,7 @@ define MINUI_BUILD_CMDS
 		$(MINUI_SRC_DIR)/common/utils.c \
 		$(MINUI_SRC_DIR)/common/api.c \
 		$(MINUI_SRC_DIR)/common/core_registry.c \
+		$(MINUI_PLATFORM_DIR)/input.c \
 		$(MINUI_PLATFORM_DIR)/platform.c \
 		-o $(MINUI_BUILD_DIR)/minarch \
 		$(TARGET_LDFLAGS) $(MINUI_RUNTIME_RPATH) $(MINUI_LZ4_LDFLAGS) -L$(MINUI_BUILD_DIR) -ldl -llz4 -lmsettings -lSDL2 -lSDL2_image -lSDL2_ttf -lpthread -lm -lz
@@ -85,8 +104,8 @@ define MINUI_BUILD_CMDS
 		$(MINUI_SRC_DIR)/settings/menu.c \
 		$(MINUI_SRC_DIR)/settings/jobs.c \
 		$(MINUI_SRC_DIR)/settings/timezone.c \
-		$(MINUI_SRC_DIR)/settings/wifi_backend.c \
-		$(MINUI_SRC_DIR)/settings/bt_backend.c \
+		$(MINUI_PLATFORM_DIR)/wireless.c \
+		$(MINUI_PLATFORM_DIR)/wireless_bluetooth.c \
 		$(MINUI_SRC_DIR)/settings/about.c \
 		$(MINUI_SRC_DIR)/settings/power.c \
 		$(MINUI_SRC_DIR)/settings/time.c \
@@ -101,13 +120,16 @@ define MINUI_BUILD_CMDS
 		$(MINUI_SRC_DIR)/common/utils.c \
 		$(MINUI_SRC_DIR)/common/api.c \
 		$(MINUI_SRC_DIR)/common/core_registry.c \
+		$(MINUI_PLATFORM_DIR)/input.c \
 		$(MINUI_PLATFORM_DIR)/platform.c \
 		-o $(MINUI_BUILD_DIR)/minui \
 		$(TARGET_LDFLAGS) $(MINUI_RUNTIME_RPATH) -L$(MINUI_BUILD_DIR) -ldbus-1 -ldl -lmsettings -lSDL2 -lSDL2_image -lSDL2_ttf -lpthread -lm -lz
 	$(TARGET_CC) $(TARGET_CFLAGS) \
+		-I$(MINUI_PLATFORM_DIR) \
 		$(MINUI_SRC_DIR)/show/show.c \
 		-o $(MINUI_BUILD_DIR)/minui-show \
-		$(TARGET_LDFLAGS) -lSDL2 -lSDL2_image -lrt -ldl
+		$(TARGET_LDFLAGS) $(MINUI_RUNTIME_RPATH) -L$(MINUI_BUILD_DIR) \
+		-lmsettings -lSDL2 -lSDL2_image -lrt -ldl
 endef
 
 define MINUI_INSTALL_TARGET_CMDS

@@ -90,10 +90,6 @@ static int Zip_inflate(FILE *zip, FILE *dst, size_t size)
 
 const char *Game_storageRoot(void)
 {
-	const char *sd2 = getenv("SDCARD2_PATH");
-
-	if (sd2 && sd2[0] && prefixMatch((char *)sd2, game.path))
-		return sd2;
 	return SDCARD_PATH;
 }
 
@@ -101,6 +97,11 @@ void Game_open(char *path)
 {
 	LOG_info("Game_open\n");
 	memset(&game, 0, sizeof(game));
+
+	const char *bundle_path = getenv("MINUI_BUNDLE_PATH");
+	if (bundle_path && bundle_path[0])
+		snprintf(game.bundle_path, sizeof(game.bundle_path), "%s",
+			bundle_path);
 
 	strcpy(game.path, path);
 	strcpy(game.name, strrchr(path, '/') + 1);

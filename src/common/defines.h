@@ -10,13 +10,8 @@
 
 #define MAX_PATH 512
 
-#define SDCARD2_PATH "/mnt/sdcard2"
-
 #ifndef ROMS_PATH
 #define ROMS_PATH SDCARD_PATH "/roms"
-#endif
-#ifndef ROMS2_PATH
-#define ROMS2_PATH SDCARD2_PATH "/roms"
 #endif
 #ifndef ROOT_SYSTEM_PATH
 #define ROOT_SYSTEM_PATH "/usr/share/minui"
@@ -42,9 +37,6 @@
 #ifndef SHARED_USERDATA_PATH
 #define SHARED_USERDATA_PATH SDCARD_PATH "/saves"
 #endif
-#ifndef SHARED_USERDATA2_PATH
-#define SHARED_USERDATA2_PATH SDCARD2_PATH "/saves"
-#endif
 #ifndef RECENT_PATH
 #define RECENT_PATH USERDATA_PATH "/recent.state"
 #endif
@@ -61,9 +53,6 @@
 #endif
 #ifndef COLLECTIONS_PATH
 #define COLLECTIONS_PATH SDCARD_PATH "/collections"
-#endif
-#ifndef COLLECTIONS2_PATH
-#define COLLECTIONS2_PATH SDCARD2_PATH "/collections"
 #endif
 
 #define LAST_PATH "/tmp/last.state" // transient
@@ -186,8 +175,10 @@ enum {
 	BTN_ID_DPAD_RIGHT,
 	BTN_ID_A,
 	BTN_ID_B,
+	BTN_ID_C,
 	BTN_ID_X,
 	BTN_ID_Y,
+	BTN_ID_Z,
 	BTN_ID_START,
 	BTN_ID_SELECT,
 	BTN_ID_L1,
@@ -217,8 +208,10 @@ enum {
 	BTN_DPAD_RIGHT	= 1 << BTN_ID_DPAD_RIGHT,
 	BTN_A			= 1 << BTN_ID_A,
 	BTN_B			= 1 << BTN_ID_B,
+	BTN_C			= 1 << BTN_ID_C,
 	BTN_X			= 1 << BTN_ID_X,
 	BTN_Y			= 1 << BTN_ID_Y,
+	BTN_Z			= 1 << BTN_ID_Z,
 	BTN_START		= 1 << BTN_ID_START,
 	BTN_SELECT		= 1 << BTN_ID_SELECT,
 	BTN_L1			= 1 << BTN_ID_L1,

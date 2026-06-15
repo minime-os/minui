@@ -6,7 +6,8 @@
 #include <string.h>
 #include <strings.h>
 
-#include "bt_backend.h"
+#include "wireless.h"
+#include "traits.h"
 
 #define BT_SERVICE "org.bluez"
 #define BT_ROOT "/"
@@ -41,6 +42,13 @@ struct bt_backend_state {
 };
 
 static struct bt_backend_state bt_state;
+
+int MINIME_wirelessHasBluetooth(void)
+{
+	const MinimeTraits *traits = MINIME_traits();
+
+	return traits && MINIME_traitAvailable(traits->bluetooth_adapter);
+}
 
 ///////////////////////////////////////
 static DBusMessage *bt_call(DBusMessage *msg, int timeout_ms)
@@ -193,6 +201,11 @@ static void bt_reset_cache(void)
 
 static void bt_parse_adapter(DBusMessageIter *props, const char *path)
 {
+	const MinimeTraits *traits = MINIME_traits();
+	const char *name = strrchr(path, '/');
+
+	if (!traits || !name || strcmp(name + 1, traits->bluetooth_adapter))
+		return;
 	SETTINGS_copyText(bt_state.adapter_path,
 		sizeof(bt_state.adapter_path), path);
 	while (dbus_message_iter_get_arg_type(props) == DBUS_TYPE_DICT_ENTRY) {
@@ -386,12 +399,12 @@ static struct bt_device *bt_find_device(const char *addr)
 	return NULL;
 }
 
-int SETTINGS_BT_BACKEND_init(void)
+int MINIME_wirelessBluetoothInit(void)
 {
 	return bt_connect_bus();
 }
 
-void SETTINGS_BT_BACKEND_quit(void)
+void MINIME_wirelessBluetoothQuit(void)
 {
 	if (!bt_state.conn)
 		return;
@@ -401,7 +414,7 @@ void SETTINGS_BT_BACKEND_quit(void)
 	bt_reset_cache();
 }
 
-int SETTINGS_BT_BACKEND_refresh(struct settings_snapshot *snapshot)
+int MINIME_wirelessBluetoothRefresh(struct settings_snapshot *snapshot)
 {
 	int i;
 	int out = 0;
@@ -449,7 +462,7 @@ int SETTINGS_BT_BACKEND_refresh(struct settings_snapshot *snapshot)
 	return 0;
 }
 
-int SETTINGS_BT_BACKEND_set_enabled(int enabled)
+int MINIME_wirelessBluetoothSetEnabled(int enabled)
 {
 	if (bt_connect_bus() != 0)
 		return -ENOTCONN;
@@ -458,12 +471,12 @@ int SETTINGS_BT_BACKEND_set_enabled(int enabled)
 	if (!bt_state.adapter_path[0])
 		return -ENODEV;
 	if (!enabled)
-		(void)SETTINGS_BT_BACKEND_set_scanning(0);
+		(void)MINIME_wirelessBluetoothSetScanning(0);
 	return bt_set_bool_property(bt_state.adapter_path, BT_ADAPTER_IFACE,
 		"Powered", enabled);
 }
 
-int SETTINGS_BT_BACKEND_set_scanning(int enabled)
+int MINIME_wirelessBluetoothSetScanning(int enabled)
 {
 	if (bt_connect_bus() != 0)
 		return -ENOTCONN;
@@ -483,7 +496,7 @@ int SETTINGS_BT_BACKEND_set_scanning(int enabled)
 		BT_ADAPTER_IFACE, "StopDiscovery", 5000)) ? 0 : -EIO;
 }
 
-int SETTINGS_BT_BACKEND_toggle_device(const char *addr)
+int MINIME_wirelessBluetoothToggleDevice(const char *addr)
 {
 	struct bt_device *device;
 
@@ -517,7 +530,7 @@ int SETTINGS_BT_BACKEND_toggle_device(const char *addr)
 		"Connect", 12000)) ? 0 : -EIO;
 }
 
-int SETTINGS_BT_BACKEND_forget_device(const char *addr)
+int MINIME_wirelessBluetoothForgetDevice(const char *addr)
 {
 	struct bt_device *device;
 	DBusMessage *msg;
@@ -547,7 +560,7 @@ int SETTINGS_BT_BACKEND_forget_device(const char *addr)
 	return bt_reply_ok(bt_call(msg, 5000)) ? 0 : -EIO;
 }
 
-int SETTINGS_BT_BACKEND_confirm_device(const char *addr, int accept)
+int MINIME_wirelessBluetoothConfirmDevice(const char *addr, int accept)
 {
 	(void)addr;
 	(void)accept;

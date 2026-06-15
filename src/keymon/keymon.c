@@ -3,8 +3,6 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <string.h>
-#include <fcntl.h>
-#include <dirent.h>
 #include <linux/input.h>
 #include <pthread.h>
 
@@ -12,7 +10,10 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/ioctl.h>
+
+#include "input.h"
+#include "traits.h"
+#include "video.h"
 
 // #include "defines.h"
 
@@ -20,12 +21,6 @@
 #define VOLUME_MAX 		20
 #define BRIGHTNESS_MIN 	0
 #define BRIGHTNESS_MAX 	10
-
-// uses different codes from SDL
-#define CODE_MENU		316
-#define CODE_MENU_ALT	354
-#define CODE_PLUS		115
-#define CODE_MINUS		114
 
 //	for ev.value
 #define RELEASED	0
@@ -36,28 +31,17 @@ static int input_fds[4] = {0};
 static int input_count = 0;
 
 static pthread_t hdmi_pt;
-#define HDMI_STATE_PATH "/sys/class/extcon/hdmi/cable.0/state"
-
-int getInt(char* path) {
-	int i = 0;
-	FILE *file = fopen(path, "r");
-	if (file!=NULL) {
-		fscanf(file, "%i", &i);
-		fclose(file);
-	}
-	return i;
-}
 
 static void* watchHDMI(void *arg) {
 	int has_hdmi,had_hdmi;
 	
-	has_hdmi = had_hdmi = getInt(HDMI_STATE_PATH);
+	has_hdmi = had_hdmi = MINIME_videoHDMIConnected();
 	SetHDMI(has_hdmi);
 	
 	while(1) {
 		sleep(1);
 		
-		has_hdmi = getInt(HDMI_STATE_PATH);
+		has_hdmi = MINIME_videoHDMIConnected();
 		if (had_hdmi!=has_hdmi) {
 			had_hdmi = has_hdmi;
 			SetHDMI(has_hdmi);
@@ -68,32 +52,17 @@ static void* watchHDMI(void *arg) {
 }
 
 int main (int argc, char *argv[]) {
+	const MinimeTraits *traits;
+
+	(void)argc;
+	(void)argv;
+	if (MINIME_traitsInit() != 0)
+		return 1;
+	traits = MINIME_traits();
 	InitSettings();
 	pthread_create(&hdmi_pt, NULL, &watchHDMI, NULL);
-
-	char path[256];
-	char name[256];
-	for (int i=0; i<10; i++) {
-		sprintf(path, "/dev/input/event%i", i);
-		int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-		if (fd<0) continue;
-		memset(name, 0, sizeof(name));
-		if (ioctl(fd, EVIOCGNAME(sizeof(name)), name)<0) {
-			close(fd);
-			continue;
-		}
-		if (
-			strstr(name, "gpio-keys") ||
-			strstr(name, "axp20x-pek") ||
-			strstr(name, "adc-keys")
-		) {
-			input_fds[input_count++] = fd;
-		}
-		else {
-			close(fd);
-		}
-		if (input_count>=4) break;
-	}
+	input_count = MINIME_inputOpenShortcutDevices(input_fds,
+		sizeof(input_fds) / sizeof(input_fds[0]));
 
 	uint32_t val;
 	uint32_t menu_pressed = 0;
@@ -129,21 +98,14 @@ int main (int argc, char *argv[]) {
 				val = ev.value;
 
 				if (( ev.type != EV_KEY ) || ( val > REPEAT )) continue;
-				switch (ev.code) {
-					case CODE_MENU:
-					case CODE_MENU_ALT:
-						menu_pressed = val;
-					break;
-					case CODE_PLUS:
-						up_pressed = up_just_pressed = val;
-						if (val) up_repeat_at = now + 300;
-					break;
-					case CODE_MINUS:
-						down_pressed = down_just_pressed = val;
-						if (val) down_repeat_at = now + 300;
-					break;
-					default:
-					break;
+				if (ev.code == traits->key_menu) {
+					menu_pressed = val;
+				} else if (ev.code == traits->key_vol_up) {
+					up_pressed = up_just_pressed = val;
+					if (val) up_repeat_at = now + 300;
+				} else if (ev.code == traits->key_vol_down) {
+					down_pressed = down_just_pressed = val;
+					if (val) down_repeat_at = now + 300;
 				}
 			}
 		}

@@ -137,6 +137,7 @@ void SETTINGS_CONTROLS_draw(struct settings_screen *screen, SDL_Surface *dst)
 	int has_power;
 	int has_menu;
 	int has_both;
+	int has_cz;
 	int oy;
 
 	(void)screen;
@@ -154,6 +155,7 @@ void SETTINGS_CONTROLS_draw(struct settings_screen *screen, SDL_Surface *dst)
 	has_power = HAS_POWER_BUTTON;
 	has_menu = HAS_MENU_BUTTON;
 	has_both = has_power && has_menu;
+	has_cz = PLAT_hasButtonCZ();
 
 	oy = SCALE1(PADDING);
 	if (!has_l3 && !has_r3)
@@ -238,26 +240,44 @@ void SETTINGS_CONTROLS_draw(struct settings_screen *screen, SDL_Surface *dst)
 	}
 
 	{
-		int x = FIXED_WIDTH - SCALE1(PADDING + PILL_SIZE * 3) +
-			SCALE1(PILL_SIZE);
+		int x = FIXED_WIDTH - SCALE1(PADDING + PILL_SIZE * 3);
 		int y = oy + SCALE1(PILL_SIZE * 2);
 		int o = SCALE1(BUTTON_MARGIN);
 
-		GFX_blitPill(ASSET_DARK_GRAY_PILL, dst, &(SDL_Rect){ x, y, 0 });
-		controls_drawButton("X", dst, PAD_isPressed(BTN_X), x + o, y + o, 0);
-
-		y += SCALE1(PILL_SIZE * 2);
-		GFX_blitPill(ASSET_DARK_GRAY_PILL, dst, &(SDL_Rect){ x, y, 0 });
-		controls_drawButton("B", dst, PAD_isPressed(BTN_B), x + o, y + o, 0);
-
-		x -= SCALE1(PILL_SIZE);
-		y -= SCALE1(PILL_SIZE);
-		GFX_blitPill(ASSET_DARK_GRAY_PILL, dst, &(SDL_Rect){ x, y, 0 });
-		controls_drawButton("Y", dst, PAD_isPressed(BTN_Y), x + o, y + o, 0);
-
-		x += SCALE1(PILL_SIZE * 2);
-		GFX_blitPill(ASSET_DARK_GRAY_PILL, dst, &(SDL_Rect){ x, y, 0 });
-		controls_drawButton("A", dst, PAD_isPressed(BTN_A), x + o, y + o, 0);
+		if (has_cz) {
+			const char *labels[] = {"X", "Y", "Z", "A", "B", "C"};
+			const int buttons[] = {BTN_X, BTN_Y, BTN_Z, BTN_A, BTN_B, BTN_C};
+			for (int i=0; i<6; i++) {
+				int bx = x + SCALE1((i % 3) * PILL_SIZE);
+				int by = y + SCALE1((i / 3) * PILL_SIZE);
+				GFX_blitPill(ASSET_DARK_GRAY_PILL, dst,
+					&(SDL_Rect){ bx, by, 0 });
+				controls_drawButton(labels[i], dst,
+					PAD_isPressed(buttons[i]), bx + o, by + o, 0);
+			}
+		} else {
+			x += SCALE1(PILL_SIZE);
+			GFX_blitPill(ASSET_DARK_GRAY_PILL, dst,
+				&(SDL_Rect){ x, y, 0 });
+			controls_drawButton("X", dst, PAD_isPressed(BTN_X), x + o,
+				y + o, 0);
+			y += SCALE1(PILL_SIZE * 2);
+			GFX_blitPill(ASSET_DARK_GRAY_PILL, dst,
+				&(SDL_Rect){ x, y, 0 });
+			controls_drawButton("B", dst, PAD_isPressed(BTN_B), x + o,
+				y + o, 0);
+			x -= SCALE1(PILL_SIZE);
+			y -= SCALE1(PILL_SIZE);
+			GFX_blitPill(ASSET_DARK_GRAY_PILL, dst,
+				&(SDL_Rect){ x, y, 0 });
+			controls_drawButton("Y", dst, PAD_isPressed(BTN_Y), x + o,
+				y + o, 0);
+			x += SCALE1(PILL_SIZE * 2);
+			GFX_blitPill(ASSET_DARK_GRAY_PILL, dst,
+				&(SDL_Rect){ x, y, 0 });
+			controls_drawButton("A", dst, PAD_isPressed(BTN_A), x + o,
+				y + o, 0);
+		}
 	}
 
 	if (has_volume) {

@@ -3,14 +3,13 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/mman.h>
-#include <linux/fb.h>
-#include <sys/ioctl.h>
 #include <errno.h>
 #include <sys/stat.h>
-#include <dlfcn.h>
 #include <string.h>
 
 #include "msettings.h"
+#include "audio.h"
+#include "video.h"
 
 ///////////////////////////////////////
 
@@ -41,25 +40,11 @@ static int shm_fd = -1;
 static int is_host = 0;
 static int shm_size = sizeof(Settings);
 
-#define JACK_STATE_PATH "/sys/module/snd_soc_sunxi_component_jack/parameters/jack_state" // TODO: doesn't change, always 0
-#define HDMI_STATE_PATH "/sys/class/switch/hdmi/cable.0/state"
-
-int getInt(char* path) {
-	int i = 0;
-	FILE *file = fopen(path, "r");
-	if (file!=NULL) {
-		fscanf(file, "%i", &i);
-		fclose(file);
-	}
-	return i;
-}
-
 void InitSettings(void) {	
 	sprintf(SettingsPath, "%s/msettings.bin", getenv("USERDATA_PATH"));
 	
 	shm_fd = shm_open(SHM_KEY, O_RDWR | O_CREAT | O_EXCL, 0644); // see if it exists
 	if (shm_fd==-1 && errno==EEXIST) { // already exists
-		puts("Settings client");
 		shm_fd = shm_open(SHM_KEY, O_RDWR, 0644);
 		
 		// Wait for host to ftruncate the shared memory to prevent mapping a 0-size SHM
@@ -76,7 +61,6 @@ void InitSettings(void) {
 		settings = mmap(NULL, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
 	}
 	else { // host
-		puts("Settings host"); // should always be keymon
 		is_host = 1;
 		// we created it so set initial size and populate
 		ftruncate(shm_fd, shm_size);
@@ -98,13 +82,9 @@ void InitSettings(void) {
 		// settings->hdmi = 0;
 	}
 	
-	int jack = getInt(JACK_STATE_PATH);
-	int hdmi = getInt(HDMI_STATE_PATH);
-	printf("brightness: %i (hdmi: %i)\nspeaker: %i (jack: %i)\n", settings->brightness, hdmi, settings->speaker, jack); fflush(stdout);
-	
 	// both of these set volume
-	SetJack(jack);
-	SetHDMI(hdmi);
+	SetJack(MINIME_audioJackConnected());
+	SetHDMI(MINIME_videoHDMIConnected());
 	
 	SetBrightness(GetBrightness());
 	// system("echo $(< " BRIGHTNESS_PATH ")");
@@ -162,67 +142,13 @@ void SetVolume(int value) {
 	SaveSettings();
 }
 
-#define DISP_LCD_SET_BRIGHTNESS  0x102
 void SetRawBrightness(int val) { // 0 - 255
 	if (settings->hdmi) return;
-	
-	printf("SetRawBrightness(%i)\n", val); fflush(stdout);
-	int fd = open("/sys/class/backlight/backlight/brightness", O_WRONLY);
-	if (fd >= 0) {
-		char value[16];
-		int len = snprintf(value, sizeof(value), "%i\n", val);
-		write(fd, value, len);
-		close(fd);
-		return;
-	}
-
-	fd = open("/dev/disp", O_RDWR);
-	if (fd >= 0) {
-	    unsigned long param[4]={0,val,0,0};
-		ioctl(fd, DISP_LCD_SET_BRIGHTNESS, &param);
-		close(fd);
-	}
-}
-static void trim(char* str) {
-	char* end = str + strlen(str) - 1;
-	while (end >= str && (*end == ' ' || *end == '\n' || *end == '\r')) {
-		*end = '\0';
-		end--;
-	}
+	MINIME_videoSetBacklight(val);
 }
 
 void SetRawVolume(int val) { // 0 - 100
-	char sound_card[64] = "default";
-	char sound_mixer[64] = "lineout volume";
-	
-	FILE* file = fopen("/mnt/sdcard/.minime/traits", "r");
-	if (file) {
-		char line[256];
-		while (fgets(line, sizeof(line), file)) {
-			if (line[0] == '#' || line[0] == '\n') continue;
-			char* sep = strchr(line, '=');
-			if (!sep) continue;
-			*sep = '\0';
-			char* key = line;
-			char* val_str = sep + 1;
-			trim(key);
-			trim(val_str);
-			if (strcmp(key, "sound_card") == 0) {
-				strcpy(sound_card, val_str);
-			} else if (strcmp(key, "sound_mixer") == 0) {
-				strcpy(sound_mixer, val_str);
-			}
-		}
-		fclose(file);
-	}
-	
-	printf("SetRawVolume(%i) using card '%s' mixer '%s'\n", val, sound_card, sound_mixer); fflush(stdout);
-	char cmd[256];
-	snprintf(cmd, sizeof(cmd),
-		"amixer -q -c %s sset '%s' %i%% > /dev/null 2>&1 || "
-		"amixer -q sset '%s' %i%% > /dev/null 2>&1",
-		sound_card, sound_mixer, val, sound_mixer, val);
-	system(cmd);
+	MINIME_audioSetRawVolume(val);
 }
 
 // monitored and set by thread in keymon

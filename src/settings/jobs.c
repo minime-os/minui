@@ -13,11 +13,10 @@
 #include <msettings.h>
 
 #include "settings.h"
-#include "bt_backend.h"
 #include "jobs.h"
 #include "timezone.h"
-#include "wifi_backend.h"
 #include "utils.h"
+#include "wireless.h"
 
 /* Shared service state lives under .minime/config/ so it is UI-agnostic. */
 #define WIFI_STATE_FILE SDCARD_PATH "/.minime/config/wifi.state"
@@ -619,8 +618,8 @@ static void jobs_refresh_snapshot(void)
 	next.power_lid_behavior = PWR_getLidBehavior();
 	next.power_button_behavior = PWR_getPowerButtonBehavior();
 
-	(void)SETTINGS_WIFI_BACKEND_refresh(&next);
-	(void)SETTINGS_BT_BACKEND_refresh(&next);
+	(void)MINIME_wirelessWifiRefresh(&next);
+	(void)MINIME_wirelessBluetoothRefresh(&next);
 	jobs_merge_cached_wifi(&next, &current);
 	jobs_merge_cached_bt(&next, &current);
 	jobs_apply_pending(&next);
@@ -644,7 +643,7 @@ static void jobs_handle_wifi_toggle(const struct settings_job *job)
 	if (!!enabled_now == !!job->value)
 		return;
 
-	if (SETTINGS_WIFI_BACKEND_set_enabled(job->value) != 0) {
+	if (MINIME_wirelessWifiSetEnabled(job->value) != 0) {
 		jobs_set_error_prompt("Wi-Fi", "Wi-Fi change failed.", NULL);
 		return;
 	}
@@ -672,7 +671,7 @@ static void jobs_handle_wifi_connect(const struct settings_job *job)
 
 	jobs_wifi_pending_set(job->arg, "Connecting");
 	jobs_publish_wifi_pending(job->arg, "Connecting");
-	if (SETTINGS_WIFI_BACKEND_connect(job->arg,
+	if (MINIME_wirelessWifiConnect(job->arg,
 			job->secret[0] ? job->secret : NULL, 0) != 0) {
 		jobs_wifi_pending_clear();
 		jobs_set_error_prompt("Wi-Fi", "Wi-Fi connect failed.", job->arg);
@@ -686,7 +685,7 @@ static void jobs_handle_wifi_disconnect(const struct settings_job *job)
 	if (job->arg[0])
 		jobs_wifi_pending_set(job->arg, "Disconnecting");
 	jobs_publish_wifi_pending(job->arg, "Disconnecting");
-	if (SETTINGS_WIFI_BACKEND_disconnect() != 0) {
+	if (MINIME_wirelessWifiDisconnect() != 0) {
 		jobs_wifi_pending_clear();
 		jobs_set_error_prompt("Wi-Fi", "Wi-Fi disconnect failed.", NULL);
 	}
@@ -696,7 +695,7 @@ static void jobs_handle_wifi_forget(const struct settings_job *job)
 {
 	if (!job->arg[0])
 		return;
-	if (SETTINGS_WIFI_BACKEND_forget(job->arg) != 0)
+	if (MINIME_wirelessWifiForget(job->arg) != 0)
 		jobs_set_error_prompt("Wi-Fi", "Wi-Fi forget failed.", job->arg);
 }
 
@@ -710,7 +709,7 @@ static void jobs_handle_bt_toggle(const struct settings_job *job)
 	if (!!enabled_now == !!job->value)
 		return;
 
-	if (SETTINGS_BT_BACKEND_set_enabled(job->value) != 0) {
+	if (MINIME_wirelessBluetoothSetEnabled(job->value) != 0) {
 		jobs_set_error_prompt("Bluetooth", "Bluetooth change failed.",
 			NULL);
 		return;
@@ -733,7 +732,7 @@ static void jobs_handle_bt_toggle_device(const struct settings_job *job)
 		pending = "Connecting";
 	jobs_bt_pending_set(job->arg, pending);
 	jobs_publish_bt_pending(job->arg, pending);
-	if (SETTINGS_BT_BACKEND_toggle_device(job->arg) != 0) {
+	if (MINIME_wirelessBluetoothToggleDevice(job->arg) != 0) {
 		jobs_bt_pending_clear();
 		jobs_set_error_prompt("Bluetooth",
 			"Bluetooth device action failed.", job->arg);
@@ -742,14 +741,14 @@ static void jobs_handle_bt_toggle_device(const struct settings_job *job)
 
 static void jobs_handle_bt_confirm(const struct settings_job *job)
 {
-	if (SETTINGS_BT_BACKEND_confirm_device(job->arg, 1) != 0)
+	if (MINIME_wirelessBluetoothConfirmDevice(job->arg, 1) != 0)
 		jobs_set_error_prompt("Bluetooth",
 			"Bluetooth confirmation unsupported.", job->arg);
 }
 
 static void jobs_handle_bt_forget(const struct settings_job *job)
 {
-	if (SETTINGS_BT_BACKEND_forget_device(job->arg) != 0)
+	if (MINIME_wirelessBluetoothForgetDevice(job->arg) != 0)
 		jobs_set_error_prompt("Bluetooth",
 			"Bluetooth forget failed.", job->arg);
 }
@@ -926,7 +925,7 @@ static int jobs_sync_active_scanning(const struct settings_snapshot *snapshot)
 		if (!snapshot->wifi_scanning &&
 				(!jobs.wifi_scan_after ||
 				(int32_t)(now - jobs.wifi_scan_after) >= 0)) {
-			rc = SETTINGS_WIFI_BACKEND_set_scanning(1);
+			rc = MINIME_wirelessWifiSetScanning(1);
 			jobs.wifi_scan_after = now + SETTINGS_WIFI_SCAN_MS;
 			if (rc != 0)
 				jobs_set_error_prompt("Wi-Fi",
@@ -935,19 +934,19 @@ static int jobs_sync_active_scanning(const struct settings_snapshot *snapshot)
 				return 1;
 		}
 	} else if (!jobs.wifi_boot_scan_done && snapshot->wifi_enabled) {
-		rc = SETTINGS_WIFI_BACKEND_set_scanning(1);
+		rc = MINIME_wirelessWifiSetScanning(1);
 		if (rc == 0) {
 			jobs.wifi_boot_scan_done = 1;
 			return 1;
 		}
 	} else {
 		jobs.wifi_scan_after = 0;
-		(void)SETTINGS_WIFI_BACKEND_set_scanning(0);
+		(void)MINIME_wirelessWifiSetScanning(0);
 	}
 
 	if (jobs.active_menu == SETTINGS_MENU_BT && snapshot->bt_enabled) {
 		if (!snapshot->bt_scanning) {
-			rc = SETTINGS_BT_BACKEND_set_scanning(1);
+			rc = MINIME_wirelessBluetoothSetScanning(1);
 			if (rc != 0)
 				jobs_set_error_prompt("Bluetooth",
 					"Bluetooth scan failed.", NULL);
@@ -956,7 +955,7 @@ static int jobs_sync_active_scanning(const struct settings_snapshot *snapshot)
 		}
 	} else if (!jobs.bt_boot_scan_done && snapshot->bt_enabled) {
 		if (!jobs.bt_boot_scan_until) {
-			rc = SETTINGS_BT_BACKEND_set_scanning(1);
+			rc = MINIME_wirelessBluetoothSetScanning(1);
 			if (rc != 0) {
 				jobs.bt_boot_scan_done = 1;
 				jobs_set_error_prompt("Bluetooth",
@@ -970,7 +969,7 @@ static int jobs_sync_active_scanning(const struct settings_snapshot *snapshot)
 			jobs.bt_boot_scan_done = 1;
 			jobs.bt_boot_scan_until = 0;
 			if (snapshot->bt_scanning) {
-				rc = SETTINGS_BT_BACKEND_set_scanning(0);
+				rc = MINIME_wirelessBluetoothSetScanning(0);
 				if (rc != 0)
 					jobs_set_error_prompt("Bluetooth",
 						"Bluetooth stop scan failed.", NULL);
@@ -980,7 +979,7 @@ static int jobs_sync_active_scanning(const struct settings_snapshot *snapshot)
 		}
 	} else if (snapshot->bt_scanning) {
 		jobs.bt_boot_scan_until = 0;
-		rc = SETTINGS_BT_BACKEND_set_scanning(0);
+		rc = MINIME_wirelessBluetoothSetScanning(0);
 		if (rc != 0)
 			jobs_set_error_prompt("Bluetooth",
 				"Bluetooth stop scan failed.", NULL);
@@ -1001,8 +1000,8 @@ static void *settings_jobs_worker(void *arg)
 
 	(void)arg;
 
-	(void)SETTINGS_WIFI_BACKEND_init();
-	(void)SETTINGS_BT_BACKEND_init();
+	(void)MINIME_wirelessWifiInit();
+	(void)MINIME_wirelessBluetoothInit();
 
 	pthread_mutex_lock(&jobs.lock);
 	while (jobs.running) {
@@ -1035,8 +1034,7 @@ static void *settings_jobs_worker(void *arg)
 	}
 	pthread_mutex_unlock(&jobs.lock);
 
-	SETTINGS_BT_BACKEND_quit();
-	SETTINGS_WIFI_BACKEND_quit();
+	MINIME_wirelessBluetoothQuit();
 	return NULL;
 }
 

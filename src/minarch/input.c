@@ -31,8 +31,10 @@ ButtonMapping button_label_mapping[] = {
 	{"RIGHT", RETRO_DEVICE_ID_JOYPAD_RIGHT, BTN_ID_DPAD_RIGHT},
 	{"A", RETRO_DEVICE_ID_JOYPAD_A, BTN_ID_A},
 	{"B", RETRO_DEVICE_ID_JOYPAD_B, BTN_ID_B},
+	{"C", -1, BTN_ID_C},
 	{"X", RETRO_DEVICE_ID_JOYPAD_X, BTN_ID_X},
 	{"Y", RETRO_DEVICE_ID_JOYPAD_Y, BTN_ID_Y},
+	{"Z", -1, BTN_ID_Z},
 	{"START", RETRO_DEVICE_ID_JOYPAD_START, BTN_ID_START},
 	{"SELECT", RETRO_DEVICE_ID_JOYPAD_SELECT, BTN_ID_SELECT},
 	{"L1", RETRO_DEVICE_ID_JOYPAD_L, BTN_ID_L1},
@@ -57,6 +59,8 @@ const char *device_button_names[LOCAL_BUTTON_COUNT] = {
 	[BTN_ID_X] = "X",
 	[BTN_ID_B] = "B",
 	[BTN_ID_A] = "A",
+	[BTN_ID_C] = "C",
+	[BTN_ID_Z] = "Z",
 	[BTN_ID_L1] = "L1",
 	[BTN_ID_R1] = "R1",
 	[BTN_ID_L2] = "L2",
@@ -73,8 +77,10 @@ char *button_labels[] = {
 	"RIGHT",
 	"A",
 	"B",
+	"C",
 	"X",
 	"Y",
+	"Z",
 	"START",
 	"SELECT",
 	"L1",
@@ -89,8 +95,10 @@ char *button_labels[] = {
 	"MENU+RIGHT",
 	"MENU+A",
 	"MENU+B",
+	"MENU+C",
 	"MENU+X",
 	"MENU+Y",
+	"MENU+Z",
 	"MENU+START",
 	"MENU+SELECT",
 	"MENU+L1",
@@ -341,8 +349,6 @@ void Input_init(const struct retro_input_descriptor *vars)
 	config.controls = core_button_mapping[0].name ?
 		core_button_mapping : default_button_mapping;
 
-	puts("---------------------------------");
-
 	const char *core_button_names[RETRO_BUTTON_COUNT] = {0};
 	int present[RETRO_BUTTON_COUNT] = {0};
 	int core_mapped = 0;
@@ -357,31 +363,19 @@ void Input_init(const struct retro_input_descriptor *vars)
 			}
 
 			if (var->id >= RETRO_BUTTON_COUNT) {
-				printf("UNAVAILABLE: %s\n", var->description);
-				fflush(stdout);
 				continue;
 			}
 
-			printf("PRESENT    : %s\n", var->description);
-			fflush(stdout);
 			present[var->id] = 1;
 			core_button_names[var->id] = var->description;
 		}
 	}
 
-	puts("---------------------------------");
-
 	for (int i = 0; default_button_mapping[i].name; i++) {
 		ButtonMapping *mapping = &default_button_mapping[i];
-		LOG_info("DEFAULT %s (%s): <%s>\n",
-			core_button_names[mapping->retro], mapping->name,
-			(mapping->local == BTN_ID_NONE ? "NONE" :
-				device_button_names[mapping->local]));
 		if (core_button_names[mapping->retro])
 			mapping->name = (char *)core_button_names[mapping->retro];
 	}
-
-	puts("---------------------------------");
 
 	for (int i = 0; config.controls[i].name; i++) {
 		ButtonMapping *mapping = &config.controls[i];
@@ -391,12 +385,7 @@ void Input_init(const struct retro_input_descriptor *vars)
 			mapping->ignore = 1;
 			continue;
 		}
-		LOG_info("%s: <%s> (%i:%i)\n", mapping->name,
-			(mapping->local == BTN_ID_NONE ? "NONE" :
-				device_button_names[mapping->local]),
-			mapping->local, mapping->retro);
 	}
 
-	puts("---------------------------------");
 	input_initialized = 1;
 }

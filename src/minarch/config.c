@@ -685,8 +685,7 @@ void Config_load(void)
 {
 	LOG_info("Config_load\n");
 
-	config.device_tag = getenv("DEVICE");
-	LOG_info("config.device_tag %s\n", config.device_tag);
+	config.device_tag = (char *)PLAT_getDeviceId();
 
 	Option *scaling_option = &config.frontend.options[FE_OPT_SCALING];
 	scaling_option->desc = getScreenScalingDesc();

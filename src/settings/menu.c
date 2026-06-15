@@ -1,5 +1,6 @@
 #include "settings.h"
 #include "menu.h"
+#include "wireless.h"
 
 int SETTINGS_ABOUT_buildMenu(struct settings_screen *screen,
 	const struct settings_snapshot *snapshot,
@@ -62,18 +63,22 @@ static int SETTINGS_ROOT_buildMenu(struct settings_screen *screen,
 	(void)screen;
 	(void)snapshot;
 
-	if (!items || max_items < 6)
+	if (!items || max_items < 4)
 		return 0;
 
-	item = &items[count++];
-	SETTINGS_initItem(item, SETTINGS_ITEM_SUBMENU, SETTINGS_ACTION_NONE,
-		"Wi-Fi", "");
-	item->submenu_id = SETTINGS_MENU_WIFI;
+	if (MINIME_wirelessHasWifi()) {
+		item = &items[count++];
+		SETTINGS_initItem(item, SETTINGS_ITEM_SUBMENU, SETTINGS_ACTION_NONE,
+			"Wi-Fi", "");
+		item->submenu_id = SETTINGS_MENU_WIFI;
+	}
 
-	item = &items[count++];
-	SETTINGS_initItem(item, SETTINGS_ITEM_SUBMENU, SETTINGS_ACTION_NONE,
-		"Bluetooth", "");
-	item->submenu_id = SETTINGS_MENU_BT;
+	if (MINIME_wirelessHasBluetooth()) {
+		item = &items[count++];
+		SETTINGS_initItem(item, SETTINGS_ITEM_SUBMENU, SETTINGS_ACTION_NONE,
+			"Bluetooth", "");
+		item->submenu_id = SETTINGS_MENU_BT;
+	}
 
 	item = &items[count++];
 	SETTINGS_initItem(item, SETTINGS_ITEM_SUBMENU, SETTINGS_ACTION_NONE,

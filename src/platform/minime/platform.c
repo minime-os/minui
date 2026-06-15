@@ -19,6 +19,10 @@
 #include "utils.h"
 
 #include "scaler.h"
+#include "input.h"
+#include "power.h"
+#include "traits.h"
+#include "video.h"
 
 int plat_fixed_width = 640;
 int plat_fixed_height = 480;
@@ -30,19 +34,7 @@ int on_hdmi = 0;
 int is_cubexx = 0;
 int is_rg34xx = 0;
 static int rotate = 0;
-static char plat_device_model[256] = "";
-
-static char trait_battery_capacity_path[256] = "";
-static char trait_charger_online_path[256] = "";
-static char trait_backlight_path[256] = "/sys/class/backlight/backlight/brightness";
-static char trait_lid_switch_path[256] = "";
-static char trait_rumble_path[256] = "";
-static char trait_power_led_path[256] = "";
-static char trait_sound_card[64] = "default";
-static char trait_sound_mixer[64] = "lineout volume";
-static char trait_input_gamepad[64] = "gpio-keys-gamepad";
-static char trait_input_power[64] = "axp20x-pek";
-static char trait_input_volume[64] = "gpio-keys-volume";
+static const MinimeTraits *traits;
 
 // Raw keycodes
 static int k_up = 544;
@@ -68,70 +60,36 @@ static int k_power = 116;
 static int k_vol_up = 115;
 static int k_vol_down = 114;
 
-static void trim(char* str) {
-    char* end = str + strlen(str) - 1;
-    while (end >= str && (*end == ' ' || *end == '\n' || *end == '\r')) {
-        *end = '\0';
-        end--;
-    }
-}
-
 static void load_traits(void) {
-    FILE* file = fopen("/mnt/sdcard/.minime/traits", "r");
-    if (!file) return;
-
-    char line[256];
-    while (fgets(line, sizeof(line), file)) {
-        if (line[0] == '#' || line[0] == '\n') continue;
-        char* sep = strchr(line, '=');
-        if (!sep) continue;
-        *sep = '\0';
-        char* key = line;
-        char* val = sep + 1;
-        trim(key);
-        trim(val);
-
-        if (strcmp(key, "device_model") == 0) strcpy(plat_device_model, val);
-        else if (strcmp(key, "screen_width") == 0) plat_fixed_width = atoi(val);
-        else if (strcmp(key, "screen_height") == 0) plat_fixed_height = atoi(val);
-        else if (strcmp(key, "screen_rotation") == 0) plat_screen_rotation = atoi(val);
-        else if (strcmp(key, "has_hdmi") == 0) plat_has_hdmi = (strcmp(val, "yes") == 0);
-        else if (strcmp(key, "has_lid") == 0) lid.has_lid = (strcmp(val, "yes") == 0);
-        else if (strcmp(key, "battery_capacity_path") == 0) strcpy(trait_battery_capacity_path, val);
-        else if (strcmp(key, "charger_online_path") == 0) strcpy(trait_charger_online_path, val);
-        else if (strcmp(key, "backlight_path") == 0) strcpy(trait_backlight_path, val);
-        else if (strcmp(key, "lid_switch_path") == 0) strcpy(trait_lid_switch_path, val);
-        else if (strcmp(key, "rumble_path") == 0) strcpy(trait_rumble_path, val);
-        else if (strcmp(key, "power_led_path") == 0) strcpy(trait_power_led_path, val);
-        else if (strcmp(key, "sound_card") == 0) strcpy(trait_sound_card, val);
-        else if (strcmp(key, "sound_mixer") == 0) strcpy(trait_sound_mixer, val);
-        else if (strcmp(key, "input_gamepad_device_name") == 0) strcpy(trait_input_gamepad, val);
-        else if (strcmp(key, "input_power_device_name") == 0) strcpy(trait_input_power, val);
-        else if (strcmp(key, "input_volume_device_name") == 0) strcpy(trait_input_volume, val);
-        else if (strcmp(key, "key_up") == 0) k_up = atoi(val);
-        else if (strcmp(key, "key_down") == 0) k_down = atoi(val);
-        else if (strcmp(key, "key_left") == 0) k_left = atoi(val);
-        else if (strcmp(key, "key_right") == 0) k_right = atoi(val);
-        else if (strcmp(key, "key_a") == 0) k_a = atoi(val);
-        else if (strcmp(key, "key_b") == 0) k_b = atoi(val);
-        else if (strcmp(key, "key_x") == 0) k_x = atoi(val);
-        else if (strcmp(key, "key_y") == 0) k_y = atoi(val);
-        else if (strcmp(key, "key_c") == 0) k_c = atoi(val);
-        else if (strcmp(key, "key_z") == 0) k_z = atoi(val);
-        else if (strcmp(key, "key_l1") == 0) k_l1 = atoi(val);
-        else if (strcmp(key, "key_r1") == 0) k_r1 = atoi(val);
-        else if (strcmp(key, "key_l2") == 0) k_l2 = atoi(val);
-        else if (strcmp(key, "key_r2") == 0) k_r2 = atoi(val);
-        else if (strcmp(key, "key_l3") == 0) k_l3 = atoi(val);
-        else if (strcmp(key, "key_r3") == 0) k_r3 = atoi(val);
-        else if (strcmp(key, "key_start") == 0) k_start = atoi(val);
-        else if (strcmp(key, "key_select") == 0) k_select = atoi(val);
-        else if (strcmp(key, "key_menu") == 0) k_menu = atoi(val);
-        else if (strcmp(key, "key_power") == 0) k_power = atoi(val);
-        else if (strcmp(key, "key_vol_up") == 0) k_vol_up = atoi(val);
-        else if (strcmp(key, "key_vol_down") == 0) k_vol_down = atoi(val);
-    }
-    fclose(file);
+	if (MINIME_traitsInit() != 0)
+		exit(1);
+	traits = MINIME_traits();
+	plat_fixed_width = traits->screen_width;
+	plat_fixed_height = traits->screen_height;
+	plat_screen_rotation = traits->screen_rotation;
+	plat_has_hdmi = MINIME_traitAvailable(traits->hdmi_state_path);
+	k_up = traits->key_up;
+	k_down = traits->key_down;
+	k_left = traits->key_left;
+	k_right = traits->key_right;
+	k_a = traits->key_a;
+	k_b = traits->key_b;
+	k_c = traits->key_c;
+	k_x = traits->key_x;
+	k_y = traits->key_y;
+	k_z = traits->key_z;
+	k_l1 = traits->key_l1;
+	k_r1 = traits->key_r1;
+	k_l2 = traits->key_l2;
+	k_r2 = traits->key_r2;
+	k_l3 = traits->key_l3;
+	k_r3 = traits->key_r3;
+	k_start = traits->key_start;
+	k_select = traits->key_select;
+	k_menu = traits->key_menu;
+	k_power = traits->key_power;
+	k_vol_up = traits->key_vol_up;
+	k_vol_down = traits->key_vol_down;
 
     // derive layout properties
     plat_padding = (plat_fixed_width >= 720) ? 40 : 10;
@@ -145,99 +103,20 @@ static void load_traits(void) {
 
 ///////////////////////////////
 
-#define RAW_UP		544
-#define RAW_DOWN	545
-#define RAW_LEFT	546
-#define RAW_RIGHT	547
-#define RAW_A		305
-#define RAW_B		304
-#define RAW_X		308
-#define RAW_Y		307
-#define RAW_START	315
-#define RAW_SELECT	314
-#define RAW_MENU	316
-#define RAW_L1		310
-#define RAW_L2		312
-#define RAW_L3		317
-#define RAW_R1		311
-#define RAW_R2		313
-#define RAW_R3		318
-#define RAW_PLUS	115
-#define RAW_MINUS	114
-#define RAW_POWER	116
 #define RAW_HATY	17
 #define RAW_HATX	16
-#define RAW_LSY		3
-#define RAW_LSX		2
-#define RAW_RSY		5
-#define RAW_RSX		4
 
-#define RAW_MENU1	RAW_L3
-#define RAW_MENU2	RAW_R3
-
-// TODO: thanks I hate it
-// RG P01
-#define RGP01_A			305
-#define RGP01_B			304
-#define RGP01_X			308
-#define RGP01_Y			307
-#define RGP01_START		315
-#define RGP01_SELECT	314
-#define RGP01_MENU		316
-#define RGP01_L1		310
-#define RGP01_L2		312
-#define RGP01_L3		317
-#define RGP01_R1		311
-#define RGP01_R2		313
-#define RGP01_R3		318
-#define RGP01_LSY		1
-#define RGP01_LSX		0
-#define RGP01_RSY		5
-#define RGP01_RSX		2
-#define RGP01_MENU1		RGP01_L3
-#define RGP01_MENU2		RGP01_R3
-
-// X-box (8BitDo SN30 Pro)
-#define XBOX_A		305
-#define XBOX_B		304
-#define XBOX_X		308
-#define XBOX_Y		307
-#define XBOX_START	315
-#define XBOX_SELECT	314
-#define XBOX_MENU	316
-#define XBOX_L1		310
-#define XBOX_L2		2
-#define XBOX_L3		317
-#define XBOX_R1		311
-#define XBOX_R2		5
-#define XBOX_R3		318
-#define XBOX_LSY	1
-#define XBOX_LSX	0
-#define XBOX_RSY	4
-#define XBOX_RSX	3
-#define XBOX_MENU1	XBOX_L3
-#define XBOX_MENU2	XBOX_R3
-
-typedef enum GamepadType {
-	kGamepadTypeUnknown,
-	kGamepadTypeRGP01,
-	kGamepadTypeXbox,
-} GamepadType;
-
-#define INPUT_COUNT 4
+#define INPUT_COUNT 3
 static int inputs[INPUT_COUNT];
 static uint32_t local_pad_pressed = 0;
-static uint32_t gamepad_pad_pressed = 0;
 
 #define kRawIndex 1
 #define kVolumeIndex 2
-#define kPadIndex 3
-static GamepadType pad_type = kGamepadTypeUnknown;
 static void drainInputFd(int input);
 static void drainAllInputs(void);
 
 static int anyButtonSourcePressed(int btn) {
-	return ((local_pad_pressed | gamepad_pad_pressed) & btn) != 0;
+	return (local_pad_pressed & btn) != 0;
 }
 
 static void updateButtonState(uint32_t *source_pressed, int btn, int pressed,
@@ -278,46 +157,13 @@ static void clearStaleAggregateButtons(void)
 	}
 }
 
-static int openInputByName(char* expected_name) {
-	char path[256];
-	char name[256];
-	for (int i=0; i<10; i++) {
-		sprintf(path, "/sys/class/input/event%i/device/name", i);
-		if (!exists(path)) continue;
-		name[0] = '\0';
-		getFile(path, name, sizeof(name));
-		if (!containsString(name, expected_name)) continue;
-		sprintf(path, "/dev/input/event%i", i);
-		return open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-	}
-	return -1;
-}
-static int findExternalGamepadEvent(GamepadType* type) {
-	char path[256];
-	char name[256];
-	for (int i=0; i<10; i++) {
-		sprintf(path, "/sys/class/input/event%i/device/name", i);
-		if (!exists(path)) continue;
-		name[0] = '\0';
-		getFile(path, name, sizeof(name));
-		if (containsString(name, "Anbernic")) {
-			if (type) *type = kGamepadTypeRGP01;
-			return i;
-		}
-		if (containsString(name, "Microsoft")) {
-			if (type) *type = kGamepadTypeXbox;
-			return i;
-		}
-	}
-	return -1;
-}
-
 void PLAT_initLid(void) {
-	lid.has_lid = strlen(trait_lid_switch_path) > 0 && exists(trait_lid_switch_path);
+	lid.has_lid = traits &&
+		MINIME_traitAvailable(traits->lid_switch_path);
 }
 int PLAT_lidChanged(int* state) {
 	if (lid.has_lid) {
-		int lid_open = getInt(trait_lid_switch_path);
+		int lid_open = getInt((char *)traits->lid_switch_path);
 		if (lid_open!=lid.is_open) {
 			lid.is_open = lid_open;
 			if (state) *state = lid_open;
@@ -327,65 +173,18 @@ int PLAT_lidChanged(int* state) {
 	return 0;
 }
 
-static void checkForGamepad(void) {
-	uint32_t now = SDL_GetTicks();
-	static uint32_t last_check = 0;
-	if (last_check==0 || now-last_check>2000) {
-		GamepadType type = kGamepadTypeUnknown;
-		last_check = now;
-		int connected = findExternalGamepadEvent(&type);
-		if (inputs[kPadIndex]<0 && connected>=0) {
-			LOG_info("Connecting gamepad: ");
-			if (type==kGamepadTypeRGP01) {
-				LOG_info("P01\n");
-				pad_type = kGamepadTypeRGP01;
-			}
-			else if (type==kGamepadTypeXbox) {
-				LOG_info("Xbox\n");
-				pad_type = kGamepadTypeXbox;
-			}
-			else {
-				LOG_info("Unknown\n");
-				pad_type = kGamepadTypeUnknown;
-			}
-				char path[256];
-				sprintf(path, "/dev/input/event%i", connected);
-				inputs[kPadIndex] = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-				drainInputFd(inputs[kPadIndex]);
-			}
-		else if (inputs[kPadIndex]>=0 && connected<0) {
-			LOG_info("Gamepad disconnected\n");
-			close(inputs[kPadIndex]);
-			inputs[kPadIndex] = -1;
-			pad_type = kGamepadTypeUnknown;
-		}
-	}
-}
-
 void PLAT_initInput(void) {
-	inputs[0] = openInputByName(trait_input_power);
-	if (inputs[0] < 0) inputs[0] = openInputByName("axp20x-pek");
-	if (inputs[0] < 0) inputs[0] = openInputByName("adc-keys");
-
-	inputs[kRawIndex] = openInputByName(trait_input_gamepad);
-	if (inputs[kRawIndex] < 0) inputs[kRawIndex] = openInputByName("gpio-keys-gamepad");
-	if (inputs[kRawIndex] < 0) inputs[kRawIndex] = openInputByName("gpio-keys-control");
-
-	inputs[kVolumeIndex] = openInputByName(trait_input_volume);
-	if (inputs[kVolumeIndex] < 0) inputs[kVolumeIndex] = openInputByName("gpio-keys-volume");
-	if (inputs[kVolumeIndex] < 0) inputs[kVolumeIndex] = openInputByName("gpio-keys-vol");
-
-	inputs[kPadIndex] = -1; 
+	inputs[0] = MINIME_inputOpenByName(traits->input_power);
+	inputs[kRawIndex] = MINIME_inputOpenByName(traits->input_gamepad);
+	inputs[kVolumeIndex] = MINIME_inputOpenByName(traits->input_volume);
 	local_pad_pressed = 0;
-	gamepad_pad_pressed = 0;
-	checkForGamepad();
 	drainAllInputs();
 }
 void PLAT_quitInput(void) {
 	local_pad_pressed = 0;
-	gamepad_pad_pressed = 0;
 	for (int i=0; i<INPUT_COUNT; i++) {
-		close(inputs[i]);
+		if (inputs[i] >= 0)
+			close(inputs[i]);
 	}
 }
 
@@ -425,7 +224,6 @@ void PLAT_pollInput(void) {
 		}
 	}
 	
-	checkForGamepad();
 	clearStaleAggregateButtons();
 	
 	// the actual poll
@@ -446,47 +244,10 @@ void PLAT_pollInput(void) {
 			
 			// TODO: tmp, hardcoded, missing some buttons
 			if (type==EV_KEY) {
-				uint32_t *source_pressed = i==kPadIndex ?
-					&gamepad_pad_pressed : &local_pad_pressed;
+				uint32_t *source_pressed = &local_pad_pressed;
 				if (value>1) continue; // ignore repeats
 			
 				pressed = value;
-				// LOG_info("key event: %i (%i)\n", code,pressed);
-				if (i==kPadIndex) {
-					if (pad_type==kGamepadTypeRGP01) {
-							 if (code==RGP01_A)			{ btn = BTN_A; 			id = BTN_ID_A; }
-						else if (code==RGP01_B)			{ btn = BTN_B; 			id = BTN_ID_B; }
-						else if (code==RGP01_X)			{ btn = BTN_X; 			id = BTN_ID_X; }
-						else if (code==RGP01_Y)			{ btn = BTN_Y; 			id = BTN_ID_Y; }
-						else if (code==RGP01_START)		{ btn = BTN_START; 		id = BTN_ID_START; }
-						else if (code==RGP01_SELECT)	{ btn = BTN_SELECT; 	id = BTN_ID_SELECT; }
-						else if (code==RGP01_MENU)		{ btn = BTN_MENU; 		id = BTN_ID_MENU; }
-						else if (code==RGP01_MENU1)		{ btn = BTN_MENU; 		id = BTN_ID_MENU; }
-						else if (code==RGP01_MENU2)		{ btn = BTN_MENU; 		id = BTN_ID_MENU; }
-						else if (code==RGP01_L1)		{ btn = BTN_L1; 		id = BTN_ID_L1; }
-						else if (code==RGP01_L2)		{ btn = BTN_L2; 		id = BTN_ID_L2; }
-						else if (code==RGP01_L3)		{ btn = BTN_L3; 		id = BTN_ID_L3; }
-						else if (code==RGP01_R1)		{ btn = BTN_R1; 		id = BTN_ID_R1; }
-						else if (code==RGP01_R2)		{ btn = BTN_R2; 		id = BTN_ID_R2; }
-						else if (code==RGP01_R3)		{ btn = BTN_R3; 		id = BTN_ID_R3; }
-					}
-					else if (pad_type==kGamepadTypeXbox) {
-							 if (code==XBOX_A)			{ btn = BTN_A; 			id = BTN_ID_A; }
-						else if (code==XBOX_B)			{ btn = BTN_B; 			id = BTN_ID_B; }
-						else if (code==XBOX_X)			{ btn = BTN_X; 			id = BTN_ID_X; }
-						else if (code==XBOX_Y)			{ btn = BTN_Y; 			id = BTN_ID_Y; }
-						else if (code==XBOX_START)		{ btn = BTN_START; 		id = BTN_ID_START; }
-						else if (code==XBOX_SELECT)		{ btn = BTN_SELECT; 	id = BTN_ID_SELECT; }
-						else if (code==XBOX_MENU)		{ btn = BTN_MENU; 		id = BTN_ID_MENU; }
-						else if (code==XBOX_MENU1)		{ btn = BTN_MENU; 		id = BTN_ID_MENU; }
-						else if (code==XBOX_MENU2)		{ btn = BTN_MENU; 		id = BTN_ID_MENU; }
-						else if (code==XBOX_L1)			{ btn = BTN_L1; 		id = BTN_ID_L1; }
-						else if (code==XBOX_L3)			{ btn = BTN_L3; 		id = BTN_ID_L3; }
-						else if (code==XBOX_R1)			{ btn = BTN_R1; 		id = BTN_ID_R1; }
-						else if (code==XBOX_R3)			{ btn = BTN_R3; 		id = BTN_ID_R3; }
-					}
-				}
-				else {
 						 if (code==k_up) 		{ btn = BTN_DPAD_UP; 	id = BTN_ID_DPAD_UP; }
 		 			else if (code==k_down)	{ btn = BTN_DPAD_DOWN; 	id = BTN_ID_DPAD_DOWN; }
 					else if (code==k_left)	{ btn = BTN_DPAD_LEFT; 	id = BTN_ID_DPAD_LEFT; }
@@ -495,8 +256,8 @@ void PLAT_pollInput(void) {
 					else if (code==k_b)		{ btn = BTN_B; 			id = BTN_ID_B; }
 					else if (code==k_x)		{ btn = BTN_X; 			id = BTN_ID_X; }
 					else if (code==k_y)		{ btn = BTN_Y; 			id = BTN_ID_Y; }
-					else if (code==k_c)		{ btn = BTN_R1; 		id = BTN_ID_R1; }
-					else if (code==k_z)		{ btn = BTN_R2; 		id = BTN_ID_R2; }
+					else if (code==k_c)		{ btn = BTN_C; 			id = BTN_ID_C; }
+					else if (code==k_z)		{ btn = BTN_Z; 			id = BTN_ID_Z; }
 					else if (code==k_start)	{ btn = BTN_START; 		id = BTN_ID_START; }
 					else if (code==k_select)	{ btn = BTN_SELECT; 	id = BTN_ID_SELECT; }
 					else if (code==k_menu)	{ btn = BTN_MENU; 		id = BTN_ID_MENU; }
@@ -509,7 +270,6 @@ void PLAT_pollInput(void) {
 					else if (code==k_vol_up)	{ btn = BTN_PLUS; 		id = BTN_ID_PLUS; }
 					else if (code==k_vol_down)	{ btn = BTN_MINUS; 		id = BTN_ID_MINUS; }
 					else if (code==k_power)	{ btn = BTN_POWER; 		id = BTN_ID_POWER; }
-				}
 
 				if (btn != BTN_NONE) {
 					updateButtonState(source_pressed, btn, pressed, id, tick);
@@ -550,28 +310,10 @@ void PLAT_pollInput(void) {
 					
 					btn = BTN_NONE; // already handled, force continue
 				}
-				else if (i==kPadIndex) {
-					if (pad_type==kGamepadTypeRGP01) {
-							 if (code==RGP01_LSX) { pad.laxis.x = ((value-128) * 32767) / 128; PAD_setAnalog(BTN_ID_ANALOG_LEFT, BTN_ID_ANALOG_RIGHT, pad.laxis.x, tick+PAD_REPEAT_DELAY); }
-						else if (code==RGP01_LSY) { pad.laxis.y = ((value-128) * 32767) / 128; PAD_setAnalog(BTN_ID_ANALOG_UP,   BTN_ID_ANALOG_DOWN,  pad.laxis.y, tick+PAD_REPEAT_DELAY); }
-						else if (code==RGP01_RSX) pad.raxis.x = ((value-128) * 32767) / 128;
-						else if (code==RGP01_RSY) pad.raxis.y = ((value-128) * 32767) / 128;
-					}
-					else if (pad_type==kGamepadTypeXbox) {
-							 if (code==XBOX_LSX) { pad.laxis.x = value; PAD_setAnalog(BTN_ID_ANALOG_LEFT, BTN_ID_ANALOG_RIGHT, pad.laxis.x, tick+PAD_REPEAT_DELAY); }
-						else if (code==XBOX_LSY) { pad.laxis.y = value; PAD_setAnalog(BTN_ID_ANALOG_UP,   BTN_ID_ANALOG_DOWN,  pad.laxis.y, tick+PAD_REPEAT_DELAY); }
-						else if (code==XBOX_RSX) pad.raxis.x = value;
-						else if (code==XBOX_RSY) pad.raxis.y = value;
-						else if (code==XBOX_L2) { pressed = value>0; btn = BTN_L2; id = BTN_ID_L2; }
-						else if (code==XBOX_R2) { pressed = value>0; btn = BTN_R2; id = BTN_ID_R2; }
-					}
-				}
-				else {
-						 if (code==RAW_LSX) { pad.laxis.x = (value * 32767) / 4096; PAD_setAnalog(BTN_ID_ANALOG_LEFT, BTN_ID_ANALOG_RIGHT, pad.laxis.x, tick+PAD_REPEAT_DELAY); }
-					else if (code==RAW_LSY) { pad.laxis.y = (value * 32767) / 4096; PAD_setAnalog(BTN_ID_ANALOG_UP,   BTN_ID_ANALOG_DOWN,  pad.laxis.y, tick+PAD_REPEAT_DELAY); }
-					else if (code==RAW_RSX) pad.raxis.x = (value * 32767) / 4096;
-					else if (code==RAW_RSY) pad.raxis.y = (value * 32767) / 4096;
-				}
+						 if (code==traits->axis_lx) { pad.laxis.x = MINIME_inputNormalizeAxis(value, traits->axis_lx_invert); PAD_setAnalog(BTN_ID_ANALOG_LEFT, BTN_ID_ANALOG_RIGHT, pad.laxis.x, tick+PAD_REPEAT_DELAY); }
+					else if (code==traits->axis_ly) { pad.laxis.y = MINIME_inputNormalizeAxis(value, traits->axis_ly_invert); PAD_setAnalog(BTN_ID_ANALOG_UP, BTN_ID_ANALOG_DOWN, pad.laxis.y, tick+PAD_REPEAT_DELAY); }
+					else if (code==traits->axis_rx) pad.raxis.x = MINIME_inputNormalizeAxis(value, traits->axis_rx_invert);
+					else if (code==traits->axis_ry) pad.raxis.y = MINIME_inputNormalizeAxis(value, traits->axis_ry_invert);
 			}
 			
 			if (btn==BTN_NONE) continue;
@@ -616,10 +358,6 @@ int PLAT_shouldWake(void) {
 ///////////////////////////////
 
 // based on rgb30 + tg5040 + m17
-#define HDMI_STATE_PATH "/sys/class/switch/hdmi/cable.0/state" // TODO: can detect but doesn't update automatically
-#define BLANK_PATH "/sys/class/graphics/fb0/blank"
-#define FB_DEVICE_PATH "/dev/fb0"
-
 static struct VID_Context {
 	SDL_Window* window;
 	SDL_Renderer* renderer;
@@ -657,7 +395,7 @@ static int PLAT_initDirectFB(void)
 	struct fb_fix_screeninfo finfo;
 	struct fb_var_screeninfo vinfo;
 
-	vid.fb_fd = open(FB_DEVICE_PATH, O_RDWR | O_CLOEXEC);
+	vid.fb_fd = open(traits->video_device, O_RDWR | O_CLOEXEC);
 	if (vid.fb_fd < 0)
 		return -1;
 
@@ -871,44 +609,10 @@ static void PLAT_blitRendererDirectFB(const GFX_Renderer *renderer)
 SDL_Surface* PLAT_initVideo(void) {
 	load_traits();
 	
-	// SDL_version compiled;
-	// SDL_version linked;
-	// SDL_VERSION(&compiled);
-	// SDL_GetVersion(&linked);
-	// LOG_info("Compiled SDL version %d.%d.%d ...\n", compiled.major, compiled.minor, compiled.patch);
-	// LOG_info("Linked SDL version %d.%d.%d.\n", linked.major, linked.minor, linked.patch);
-	//
-	// int num_displays = SDL_GetNumVideoDisplays();
-	// LOG_info("SDL_GetNumVideoDisplays(): %i\n", num_displays);
-	//
-	// LOG_info("Available video drivers:\n");
-	// for (int i=0; i<SDL_GetNumVideoDrivers(); i++) {
-	// 	LOG_info("- %s\n", SDL_GetVideoDriver(i));
-	// }
-	// LOG_info("Current video driver: %s\n", SDL_GetCurrentVideoDriver());
-	//
-	// LOG_info("Available render drivers:\n");
-	// for (int i=0; i<SDL_GetNumRenderDrivers(); i++) {
-	// 	SDL_RendererInfo info;
-	// 	SDL_GetRenderDriverInfo(i,&info);
-	// 	LOG_info("- %s\n", info.name);
-	// }
-	//
-	// LOG_info("Available display modes:\n");
-	// SDL_DisplayMode mode;
-	// for (int i=0; i<SDL_GetNumDisplayModes(0); i++) {
-	// 	SDL_GetDisplayMode(0, i, &mode);
-	// 	LOG_info("- %ix%i (%s)\n", mode.w,mode.h, SDL_GetPixelFormatName(mode.format));
-	// }
-	// SDL_GetCurrentDisplayMode(0, &mode);
-	// LOG_info("Current display mode: %ix%i (%s)\n", mode.w,mode.h, SDL_GetPixelFormatName(mode.format));
-
-	// SDL_SetHint(SDL_HINT_RENDER_VSYNC,"0"); // ignored
-
 	int w = FIXED_WIDTH;
 	int h = FIXED_HEIGHT;
 	int p = FIXED_PITCH;
-	if (getInt(HDMI_STATE_PATH)) { // can't use getHDMI() from settings because it hasn't be initialized yet
+	if (MINIME_videoHDMIConnected()) {
 		w = HDMI_WIDTH;
 		h = HDMI_HEIGHT;
 		p = HDMI_PITCH;
@@ -920,17 +624,13 @@ SDL_Surface* PLAT_initVideo(void) {
 	vid.fb_map = NULL;
 	vid.fb_map_len = 0;
 	if (!on_hdmi) {
-		if (PLAT_initDirectFB() == 0) {
-			LOG_info("direct-fb enabled: %ix%i@%ibpp stride=%i\n",
-				vid.fb_xres, vid.fb_yres, vid.fb_bpp, vid.fb_stride);
-		}
+		(void)PLAT_initDirectFB();
 	}
 	
 	if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
 		LOG_error("SDL video init failed: %s\n", SDL_GetError());
 		exit(1);
 	}
-	LOG_info("SDL video driver: %s\n", SDL_GetCurrentVideoDriver());
 	SDL_ShowCursor(0);
 	
 	vid.window   = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, w,h, SDL_WINDOW_SHOWN);
@@ -938,77 +638,24 @@ SDL_Surface* PLAT_initVideo(void) {
 		LOG_error("SDL window creation failed: %s\n", SDL_GetError());
 		exit(1);
 	}
-	// LOG_info("window size: %ix%i\n", w,h);
-	
-	SDL_DisplayMode mode;
-	SDL_GetCurrentDisplayMode(0, &mode);
-	LOG_info("Current display mode: %ix%i (%s)\n", mode.w,mode.h, SDL_GetPixelFormatName(mode.format));
-	if (plat_screen_rotation == -1) {
-		if (mode.h>mode.w) rotate = 3; // no longer set on 28xx (because of SDL2 rotation patch?)
-	}
 	vid.renderer = SDL_CreateRenderer(vid.window,-1,SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);
 	if (!vid.renderer) {
 		LOG_error("SDL renderer creation failed: %s\n", SDL_GetError());
 		exit(1);
 	}
-	SDL_RendererInfo info;
-	if (SDL_GetRendererInfo(vid.renderer, &info) == 0)
-		LOG_info("SDL render driver: %s\n", info.name);
-	// SDL_RenderSetLogicalSize(vid.renderer, w,h); // TODO: wrong, but without and with the below it's even wrong-er
-	
-	// int renderer_width,renderer_height;
-	// SDL_GetRendererOutputSize(vid.renderer, &renderer_width, &renderer_height);
-	// LOG_info("output size: %ix%i\n", renderer_width, renderer_height);
-	// if (renderer_width!=w) { // I think this can only be hdmi
-	// 	float x_scale = (float)renderer_width / w;
-	// 	float y_scale = (float)renderer_height / h;
-	// 	SDL_SetWindowSize(vid.window, w / x_scale, h / y_scale);
-	//
-	// 	SDL_GetRendererOutputSize(vid.renderer, &renderer_width, &renderer_height);
-	// 	LOG_info("adjusted size: %ix%i\n", renderer_width, renderer_height);
-	// 	x_scale = (float)renderer_width / w;
-	// 	y_scale = (float)renderer_height / h;
-	// 	SDL_RenderSetScale(vid.renderer, x_scale,y_scale);
-	//
-	// 	// for some reason we need to clear and present
-	// 	// after setting the window size or we'll miss
-	// 	// the first frame
-	// 	SDL_RenderClear(vid.renderer);
-	// 	SDL_RenderPresent(vid.renderer);
-	// }
-	//
-	// SDL_RendererInfo info;
-	// SDL_GetRendererInfo(vid.renderer, &info);
-	// LOG_info("Current render driver: %s\n", info.name);
-	
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"1"); // linear
-	LOG_info("Creating SDL texture: RGB565 %ix%i\n", w,h);
 	vid.texture = SDL_CreateTexture(vid.renderer,SDL_PIXELFORMAT_RGB565, SDL_TEXTUREACCESS_STREAMING, w,h);
 	if (!vid.texture) {
 		LOG_error("SDL texture creation failed: %s\n", SDL_GetError());
 		exit(1);
 	}
-	LOG_info("SDL texture created\n");
 	vid.target	= NULL; // only needed for non-native sizes
-	
-	// TODO: doesn't work here
-	// SDL_SetTextureScaleMode(vid.texture, SDL_ScaleModeLinear); // we always start at device size so use linear for better upscaling over hdmi
-	
-	// SDL_ScaleMode scale_mode;
-	// SDL_GetTextureScaleMode(vid.texture, &scale_mode);
-	// LOG_info("texture scale mode: %i\n", scale_mode);
-	
-	// int format;
-	// int access_;
-	// SDL_QueryTexture(vid.texture, &format, &access_, NULL,NULL);
-	// LOG_info("texture format: %s (streaming: %i)\n", SDL_GetPixelFormatName(format), access_==SDL_TEXTUREACCESS_STREAMING);
 	
 	vid.screen	= SDL_CreateRGBSurface(SDL_SWSURFACE, w,h, FIXED_DEPTH, RGBA_MASK_565);
 	if (!vid.screen) {
 		LOG_error("SDL screen surface creation failed: %s\n", SDL_GetError());
 		exit(1);
 	}
-	LOG_info("SDL screen surface created\n");
 	vid.width	= w;
 	vid.height	= h;
 	vid.pitch	= p;
@@ -1022,17 +669,7 @@ SDL_Surface* PLAT_initVideo(void) {
 	return vid.screen;
 }
 
-static void clearVideo(void) {
-	SDL_FillRect(vid.screen, NULL, 0);
-	for (int i=0; i<3; i++) {
-		SDL_RenderClear(vid.renderer);
-		SDL_RenderPresent(vid.renderer);
-	}
-}
-
 void PLAT_quitVideo(void) {
-	// clearVideo();
-
 	SDL_FreeSurface(vid.screen);
 	if (vid.target) SDL_DestroyTexture(vid.target);
 	if (vid.effect) SDL_DestroyTexture(vid.effect);
@@ -1041,7 +678,6 @@ void PLAT_quitVideo(void) {
 	SDL_DestroyWindow(vid.window);
 	PLAT_quitDirectFB();
 
-	// system("cat /dev/zero > /dev/fb0 2>/dev/null");
 	SDL_Quit();
 }
 
@@ -1054,7 +690,7 @@ void PLAT_clearAll(void) {
 }
 
 void PLAT_setVsync(int vsync) {
-	// buh
+	(void)vsync;
 }
 
 static int hard_scale = 4; // TODO: base src size, eg. 160x144 can be 4
@@ -1067,8 +703,6 @@ static void resizeVideo(int w, int h, int p) {
 	if (w>=device_width && h>=device_height) hard_scale = 1;
 	else if (h>=160) hard_scale = 2; // limits gba and up to 2x (seems sufficient for 640x480)
 	else hard_scale = 4;
-
-	LOG_info("resizeVideo(%i,%i,%i) hard_scale: %i crisp: %i\n",w,h,p, hard_scale,vid.sharpness==SHARPNESS_CRISP);
 
 	SDL_DestroyTexture(vid.texture);
 	if (vid.target) SDL_DestroyTexture(vid.target);
@@ -1095,10 +729,13 @@ SDL_Surface* PLAT_resizeVideo(int w, int h, int p) {
 }
 
 void PLAT_setVideoScaleClip(int x, int y, int width, int height) {
-	// buh
+	(void)x;
+	(void)y;
+	(void)width;
+	(void)height;
 }
 void PLAT_setNearestNeighbor(int enabled) {
-	// buh
+	(void)enabled;
 }
 void PLAT_setSharpness(int sharpness) {
 	if (vid.sharpness==sharpness) return;
@@ -1126,14 +763,10 @@ static struct FX_Context {
 	.next_color = 0,
 };
 static void rgb565_to_rgb888(uint32_t rgb565, uint8_t *r, uint8_t *g, uint8_t *b) {
-    // Extract the red component (5 bits)
     uint8_t red = (rgb565 >> 11) & 0x1F;
-    // Extract the green component (6 bits)
     uint8_t green = (rgb565 >> 5) & 0x3F;
-    // Extract the blue component (5 bits)
     uint8_t blue = rgb565 & 0x1F;
 
-    // Scale the values to 8-bit range
     *r = (red << 3) | (red >> 2);
     *g = (green << 2) | (green >> 4);
     *b = (blue << 3) | (blue >> 2);
@@ -1365,65 +998,21 @@ void PLAT_quitOverlay(void) {
 	if (ovl.overlay) SDL_FreeSurface(ovl.overlay);
 }
 void PLAT_enableOverlay(int enable) {
-
+	(void)enable;
 }
 
 ///////////////////////////////
 
 static int online = 0;
-static int getOCVCapacity(int voltage_uv) {
-	FILE* file = fopen("/sys/firmware/devicetree/base/battery/ocv-capacity-table-0", "rb");
-	uint8_t entry[8];
-	int capacity = 0;
-
-	if (!file) return 0;
-	while (fread(entry, sizeof(entry), 1, file)==1) {
-		uint32_t ocv = (uint32_t)entry[0]<<24 | (uint32_t)entry[1]<<16 |
-			(uint32_t)entry[2]<<8 | entry[3];
-		capacity = (uint32_t)entry[4]<<24 | (uint32_t)entry[5]<<16 |
-			(uint32_t)entry[6]<<8 | entry[7];
-		if (voltage_uv>=ocv) break;
-	}
-	fclose(file);
-	return capacity;
-}
 void PLAT_getBatteryStatus(int* is_charging, int* charge) {
 	int i = -1;
 
 	if (!is_charging || !charge)
 		return;
 
-	if (strlen(trait_charger_online_path) > 0 && exists(trait_charger_online_path)) {
-		*is_charging = getInt(trait_charger_online_path);
-	}
-	else if (strlen(trait_battery_capacity_path) > 0) {
-		char status_path[256];
-		char status_str[32] = "";
-		snprintf(status_path, sizeof(status_path), "%s/status", trait_battery_capacity_path);
-		if (exists(status_path)) {
-			getFile(status_path, status_str, sizeof(status_str));
-			*is_charging = (prefixMatch("Charging", status_str) || prefixMatch("Full", status_str));
-		} else {
-			*is_charging = 0;
-		}
-	} else {
+	if (MINIME_powerGetBattery(is_charging, &i) != 0) {
 		*is_charging = 0;
-	}
-
-	if (strlen(trait_battery_capacity_path) > 0) {
-		char cap_path[256];
-		snprintf(cap_path, sizeof(cap_path), "%s/capacity", trait_battery_capacity_path);
-		if (exists(cap_path)) {
-			i = getInt(cap_path);
-		}
-	}
-
-	if (i <= 0 && strlen(trait_battery_capacity_path) > 0) {
-		char volt_path[256];
-		snprintf(volt_path, sizeof(volt_path), "%s/voltage_avg", trait_battery_capacity_path);
-		if (exists(volt_path)) {
-			i = getOCVCapacity(getInt(volt_path));
-		}
+		i = 0;
 	}
 
 	// worry less about battery and more about the game you're playing
@@ -1435,21 +1024,28 @@ void PLAT_getBatteryStatus(int* is_charging, int* charge) {
 	else           *charge =  10;
 
 	// wifi status, just hooking into the regular PWR polling
-	char status[16];
-	getFile("/sys/class/net/wlan0/operstate", status,16);
-	online = prefixMatch("up", status);
+	if (MINIME_traitAvailable(traits->wifi_interface)) {
+		char path[256];
+		char status[16] = "";
+		snprintf(path, sizeof(path), "/sys/class/net/%s/operstate",
+			traits->wifi_interface);
+		getFile(path, status, sizeof(status));
+		online = prefixMatch("up", status);
+	} else {
+		online = 0;
+	}
 }
 
 void PLAT_enableBacklight(int enable) {
 	if (enable) {
-		putInt(BLANK_PATH, FB_BLANK_UNBLANK); // wake
+		MINIME_videoBlank(0);
 		SetBrightness(GetBrightness());
-		if (strlen(trait_power_led_path) > 0) putInt(trait_power_led_path, 0);
+		MINIME_powerSetLED(0);
 	}
 	else {
-		putInt(BLANK_PATH, FB_BLANK_POWERDOWN); // sleep
+		MINIME_videoBlank(1);
 		SetRawBrightness(0);
-		if (strlen(trait_power_led_path) > 0) putInt(trait_power_led_path, 1);
+		MINIME_powerSetLED(1);
 	}
 }
 
@@ -1459,11 +1055,7 @@ void PLAT_powerOff(void) {
 
 	SetRawVolume(MUTE_VOLUME_RAW);
 	PLAT_enableBacklight(0);
-	if (strlen(trait_power_led_path) > 0) {
-		char cmd[256];
-		snprintf(cmd, sizeof(cmd), "echo 1 > %s", trait_power_led_path);
-		system(cmd);
-	}
+	MINIME_powerSetLED(1);
 	SND_quit();
 	VIB_quit();
 	PWR_quit();
@@ -1475,24 +1067,30 @@ void PLAT_powerOff(void) {
 ///////////////////////////////
 
 void PLAT_setCPUSpeed(int speed) {
-	// TODO: why wasn't this ever implemented?
+	MINIME_powerSetCPUSpeed(speed);
 }
 
 void PLAT_setRumble(int strength) {
 	if (GetHDMI()) return; // assume we're using a controller?
-	if (strlen(trait_rumble_path) > 0) putInt(trait_rumble_path, strength?1:0);
+	MINIME_powerSetRumble(strength ? 1 : 0);
 }
 
 int PLAT_pickSampleRate(int requested, int max) {
 	return MIN(requested, max);
 }
 
-static char model[256];
 char* PLAT_getModel(void) {
-	if (strlen(plat_device_model) > 0) return plat_device_model;
-	return "Minime Handheld";
+	return traits ? (char *)traits->device_model : "Minime Handheld";
 }
 
 int PLAT_isOnline(void) {
 	return online;
+}
+
+const char *PLAT_getDeviceId(void) {
+	return traits ? traits->device_id : NULL;
+}
+
+int PLAT_hasButtonCZ(void) {
+	return MINIME_inputHasCZ();
 }

@@ -83,9 +83,8 @@ void getEmuName(const char* in_name, char* out_name) { // NOTE: both char arrays
 	// printf("--------\n  in_name: %s\n",in_name); fflush(stdout);
 	
 	// extract just the Roms folder name if necessary
-	if (prefixMatch(ROMS_PATH, tmp) || prefixMatch(ROMS2_PATH, tmp)) {
-		if (prefixMatch(ROMS_PATH, tmp)) tmp += strlen(ROMS_PATH) + 1;
-		else tmp += strlen(ROMS2_PATH) + 1;
+	if (prefixMatch(ROMS_PATH, tmp)) {
+		tmp += strlen(ROMS_PATH) + 1;
 		char* tmp2 = strchr(tmp, '/');
 		if (tmp2) tmp2[0] = '\0';
 		strcpy(out_name, tmp);

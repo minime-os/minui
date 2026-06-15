@@ -129,6 +129,68 @@ static void resolveSaveIdForPath(const char* rom_path, char* out_save_id, size_t
 	getCanonicalEmuId(core_registry_name, out_save_id);
 }
 
+#define VERSION_MARKER ".version"
+
+static int isDirPath(const char *path) {
+	DIR *dir = opendir(path);
+
+	if (!dir) return 0;
+	closedir(dir);
+	return 1;
+}
+
+static int isVersionFolder(const char *path) {
+	char marker[MAX_PATH];
+
+	if (!path || !isDirPath(path)) return 0;
+	snprintf(marker, sizeof(marker), "%s/%s", path, VERSION_MARKER);
+	return exists(marker);
+}
+
+static int isSafeVersionName(const char *name) {
+	return name && name[0] && !strchr(name, '/') && !strchr(name, '\\') &&
+		strcmp(name, VERSION_MARKER);
+}
+
+static int readVersionChoice(const char *folder, char *path, size_t path_size) {
+	char marker[MAX_PATH];
+	char name[MAX_PATH];
+	char base[MAX_PATH];
+
+	snprintf(base, sizeof(base), "%s", folder);
+	snprintf(marker, sizeof(marker), "%s/%s", base, VERSION_MARKER);
+	getFile(marker, name, sizeof(name));
+	normalizeNewline(name);
+	trimTrailingNewlines(name);
+	if (!isSafeVersionName(name)) return 0;
+	snprintf(path, path_size, "%s/%s", base, name);
+	return exists(path);
+}
+
+static int writeVersionChoice(const char *folder, const char *path) {
+	char marker[MAX_PATH];
+	char tmp[MAX_PATH];
+	const char *name = strrchr(path, '/');
+	FILE *file;
+
+	if (!name || !isSafeVersionName(++name)) return 0;
+	snprintf(marker, sizeof(marker), "%s/%s", folder, VERSION_MARKER);
+	snprintf(tmp, sizeof(tmp), "%s.tmp", marker);
+	file = fopen(tmp, "w");
+	if (!file) return 0;
+	fputs(name, file);
+	if (fflush(file) || fsync(fileno(file))) {
+		fclose(file);
+		unlink(tmp);
+		return 0;
+	}
+	if (fclose(file) || rename(tmp, marker)) {
+		unlink(tmp);
+		return 0;
+	}
+	return 1;
+}
+
 ///////////////////////////////////////
 
 enum EntryType {
@@ -211,6 +273,7 @@ typedef struct Directory {
 	char* name;
 	Array* entries;
 	IntArray* alphas;
+	int version_chooser;
 	// rendering
 	int selected;
 	int start;
@@ -378,6 +441,7 @@ static Directory* Directory_new(char* path, int selected) {
 		self->entries = getEntries(path);
 	}
 	self->alphas = IntArray_new();
+	self->version_chooser = isVersionFolder(path);
 	self->selected = selected;
 	Directory_index(self);
 	return self;
@@ -455,8 +519,6 @@ static int quit = 0;
 static int can_resume = 0;
 static int should_resume = 0; // set to 1 on BTN_RESUME but only if can_resume==1
 static int simple_mode = 0;
-// Temporary debug feature for live testing; remove once the launcher stabilizes.
-static int live_test = 0;
 static char slot_path[256];
 
 static int restore_depth = -1;
@@ -796,7 +858,8 @@ static Array* getRecents(void) {
 		
 		char sd_path[256];
 		storedPathToAbsolute(recent->path, sd_path, sizeof(sd_path));
-		Entry* entry = Entry_new(sd_path, ENTRY_ROM);
+		Entry* entry = Entry_new(sd_path,
+			isDirPath(sd_path) ? ENTRY_DIR : ENTRY_ROM);
 		if (recent->alias) {
 			free(entry->name);
 			entry->name = strdup(recent->alias);
@@ -818,7 +881,8 @@ static Array* getCollection(char* path) {
 			char sd_path[256];
 			storedPathToAbsolute(line, sd_path, sizeof(sd_path));
 			if (exists(sd_path)) {
-				Array_push(entries, Entry_new(sd_path, ENTRY_ROM));
+				Array_push(entries, Entry_new(sd_path,
+					isDirPath(sd_path) ? ENTRY_DIR : ENTRY_ROM));
 			}
 		}
 		fclose(file);
@@ -887,6 +951,19 @@ static int getFirstDisc(char* m3u_path, char* disc_path) { // based on getDiscs(
 		fclose(file);
 	}
 	return found;
+}
+
+static int resolveDirectoryLaunch(const char *path, char *launch,
+	size_t launch_size) {
+	char m3u[MAX_PATH];
+	const char *name;
+
+	if (hasCue((char *)path, launch)) return 1;
+	name = strrchr(path, '/');
+	if (!name || !name[1]) return 0;
+	snprintf(m3u, sizeof(m3u), "%s/%s.m3u", path, name + 1);
+	if (!exists(m3u)) return 0;
+	return getFirstDisc(m3u, launch);
 }
 
 static void addEntries(Array* entries, char* path) {
@@ -1006,14 +1083,16 @@ static void readyResumePath(char* rom_path, int type) {
 	strcpy(path, rom_path);
 	
 	if (!prefixMatch(ROMS_PATH, path)) return;
+
+	if (type==ENTRY_DIR && isVersionFolder(path)) {
+		if (!readVersionChoice(path, path, sizeof(path))) return;
+		type = isDirPath(path) ? ENTRY_DIR : ENTRY_ROM;
+	}
 	
 	char auto_path[256];
 	if (type==ENTRY_DIR) {
-		if (!hasCue(path, auto_path)) { // no cue?
-			tmp = strrchr(auto_path, '.') + 1; // extension
-			strcpy(tmp, "m3u"); // replace with m3u
-			if (!exists(auto_path)) return; // no m3u
-		}
+		if (!resolveDirectoryLaunch(path, auto_path, sizeof(auto_path)))
+			return;
 		strcpy(path, auto_path); // cue or m3u if one exists
 	}
 	
@@ -1058,6 +1137,18 @@ static int autoResume(void) {
 	char sd_path[256];
 	storedPathToAbsolute(path, sd_path, sizeof(sd_path));
 	if (!exists(sd_path)) return 0;
+	char bundle_path[256] = "";
+	if (isVersionFolder(sd_path)) {
+		strcpy(bundle_path, sd_path);
+		if (!readVersionChoice(bundle_path, sd_path, sizeof(sd_path)))
+			return 0;
+		if (isDirPath(sd_path)) {
+			char cue_path[256];
+			if (!resolveDirectoryLaunch(sd_path, cue_path,
+					sizeof(cue_path))) return 0;
+			strcpy(sd_path, cue_path);
+		}
+	}
 	
 	// make sure emu still exists
 	char core_registry_name[256];
@@ -1068,8 +1159,17 @@ static int autoResume(void) {
 	
 	if (!exists(core_registry_path)) return 0;
 	
-	char cmd[256];
-	sprintf(cmd, "'%s/bin/minarch' '%s' '%s'", SYSTEM_PATH, escapeSingleQuotes(core_registry_path), escapeSingleQuotes(sd_path));
+	char cmd[1024];
+	if (bundle_path[0]) {
+		sprintf(cmd, "MINUI_BUNDLE_PATH='%s' '%s/bin/minarch' '%s' '%s'",
+			escapeSingleQuotes(bundle_path), SYSTEM_PATH,
+			escapeSingleQuotes(core_registry_path),
+			escapeSingleQuotes(sd_path));
+	} else {
+		sprintf(cmd, "'%s/bin/minarch' '%s' '%s'", SYSTEM_PATH,
+			escapeSingleQuotes(core_registry_path),
+			escapeSingleQuotes(sd_path));
+	}
 	putInt(RESUME_SLOT_PATH, AUTO_RESUME_SLOT);
 	queueNext(cmd);
 	return 1;
@@ -1129,15 +1229,45 @@ static void openRom(char* path, char* last) {
 	
 	// NOTE: escapeSingleQuotes() modifies the passed string 
 	// so we need to save the path before we call that
+	char bundle_path[256] = "";
+	if (last && isVersionFolder(last)) {
+		strcpy(bundle_path, last);
+		strcpy(recent_path, last);
+	}
 	addRecent(recent_path, recent_alias); // yiiikes
 	saveLast(last==NULL ? sd_path : last);
 	
-	char cmd[256];
-	sprintf(cmd, "'%s/bin/minarch' '%s' '%s'", SYSTEM_PATH, escapeSingleQuotes(core_registry_path), escapeSingleQuotes(sd_path));
+	char cmd[1024];
+	if (bundle_path[0]) {
+		sprintf(cmd, "MINUI_BUNDLE_PATH='%s' '%s/bin/minarch' '%s' '%s'",
+			escapeSingleQuotes(bundle_path), SYSTEM_PATH,
+			escapeSingleQuotes(core_registry_path),
+			escapeSingleQuotes(sd_path));
+	} else {
+		sprintf(cmd, "'%s/bin/minarch' '%s' '%s'", SYSTEM_PATH,
+			escapeSingleQuotes(core_registry_path),
+			escapeSingleQuotes(sd_path));
+	}
 	queueNext(cmd);
 }
-static void openDirectory(char* path, int auto_launch) {
+static void openDirectory(char* path, int auto_launch, int force_chooser) {
 	char auto_path[256];
+
+	if (isVersionFolder(path) && auto_launch && !force_chooser &&
+		readVersionChoice(path, auto_path, sizeof(auto_path))) {
+		if (isDirPath(auto_path)) {
+			char cue_path[256];
+			if (resolveDirectoryLaunch(auto_path, cue_path,
+					sizeof(cue_path))) {
+				openRom(cue_path, path);
+				return;
+			}
+		} else {
+			openRom(auto_path, path);
+			return;
+		}
+	}
+
 	auto_path[0] = '\0';
 	if (hasCue(path, auto_path) && auto_launch) {
 		openRom(auto_path, path);
@@ -1169,6 +1299,18 @@ static void openDirectory(char* path, int auto_launch) {
 	}
 	
 	top = Directory_new(path, selected);
+	if (top->version_chooser) {
+		char selected_path[256];
+		if (readVersionChoice(path, selected_path, sizeof(selected_path))) {
+			for (int i=0; i<top->entries->count; i++) {
+				Entry *entry = top->entries->items[i];
+				if (exactMatch(entry->path, selected_path)) {
+					top->selected = i;
+					break;
+				}
+			}
+		}
+	}
 	top->start = start;
 	top->end = end ? end : ((top->entries->count<MAIN_ROW_COUNT) ? top->entries->count : MAIN_ROW_COUNT);
 
@@ -1184,11 +1326,21 @@ static void closeDirectory(void) {
 	restore_relative = top->selected;
 }
 
-static void Entry_open(Entry* self) {
-	if (live_test) {
-		LOG_info("Entry_open(type=%d,path=%s)\n", self->type, self->path);
-	}
+static void Entry_open(Entry* self, int force_version_chooser) {
 	recent_alias = self->name;  // yiiikes
+	if (top->version_chooser) {
+		writeVersionChoice(top->path, self->path);
+		if (self->type==ENTRY_ROM) {
+			openRom(self->path, top->path);
+			return;
+		}
+		char cue_path[256];
+		if (resolveDirectoryLaunch(self->path, cue_path,
+				sizeof(cue_path))) {
+			openRom(cue_path, top->path);
+			return;
+		}
+	}
 	if (self->type==ENTRY_ROM) {
 		char *last = NULL;
 		if (prefixMatch(COLLECTIONS_PATH, top->path)) {
@@ -1205,7 +1357,7 @@ static void Entry_open(Entry* self) {
 		openRom(self->path, last);
 	}
 	else if (self->type==ENTRY_DIR) {
-		openDirectory(self->path, 1);
+		openDirectory(self->path, 1, force_version_chooser);
 	}
 }
 
@@ -1271,7 +1423,7 @@ static void loadLast(void) { // call after loading root directory
 					if (last->count==0 && !exactMatch(entry->path, FAUX_RECENT_PATH) && !(!exactMatch(entry->path, COLLECTIONS_PATH) && prefixMatch(COLLECTIONS_PATH, entry->path))) break; // don't show contents of auto-launch dirs
 				
 					if (entry->type==ENTRY_DIR) {
-						openDirectory(entry->path, 0);
+						openDirectory(entry->path, 0, 0);
 						break;
 					}
 				}
@@ -1289,7 +1441,7 @@ static void Menu_init(void) {
 	stack = Array_new(); // array of open Directories
 	recents = Array_new();
 
-	openDirectory(SDCARD_PATH, 0);
+	openDirectory(SDCARD_PATH, 0, 0);
 	loadLast(); // restore state when available
 }
 static void Menu_quit(void) {
@@ -1307,8 +1459,6 @@ int main (int argc, char *argv[]) {
 	if (autoResume()) return 0; // nothing to do
 	
 	simple_mode = exists(SIMPLE_MODE_PATH);
-	live_test = getenv("MINUI_LIVE_TEST") != NULL;
-
 	LOG_info("MinUI\n");
 	InitSettings();
 	
@@ -1320,11 +1470,6 @@ int main (int argc, char *argv[]) {
 	
 	PWR_init();
 	if (!HAS_POWER_BUTTON && !simple_mode) PWR_disableSleep();
-	if (getenv("MINUI_LIVE_TEST")) {
-		PWR_disablePowerOff();
-		PWR_disableSleep();
-		PWR_disableAutosleep();
-	}
 	// LOG_info("- power init: %lu\n", SDL_GetTicks() - main_begin);
 	
 	Menu_init();
@@ -1477,15 +1622,6 @@ int main (int argc, char *argv[]) {
 			}
 	
 				if (selected!=top->selected) {
-					if (live_test) {
-						Entry* moved = top->entries->items[selected];
-						LOG_info(
-							"Selection moved %d -> %d (%s)\n",
-							top->selected,
-							selected,
-							moved->name
-						);
-					}
 					top->selected = selected;
 					dirty = 1;
 				}
@@ -1494,15 +1630,12 @@ int main (int argc, char *argv[]) {
 
 			if (total>0 && can_resume && PAD_justReleased(BTN_RESUME)) {
 				should_resume = 1;
-				Entry_open(top->entries->items[top->selected]);
+				Entry_open(top->entries->items[top->selected], 0);
 				dirty = 1;
 				}
 				else if (total>0 && PAD_justPressed(BTN_A)) {
-					if (live_test) {
-						Entry* entry = top->entries->items[top->selected];
-						LOG_info("BTN_A pressed on %s\n", entry->name);
-					}
-					Entry_open(top->entries->items[top->selected]);
+					Entry_open(top->entries->items[top->selected],
+						PAD_isPressed(BTN_SELECT));
 					total = top->entries->count;
 					dirty = 1;
 

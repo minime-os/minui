@@ -75,7 +75,7 @@ enum {
 	CONFIG_WRITE_GAME,
 };
 
-#define LOCAL_BUTTON_COUNT 16
+#define LOCAL_BUTTON_COUNT 18
 #define RETRO_BUTTON_COUNT 16
 
 typedef struct Option {
@@ -147,6 +147,7 @@ typedef struct Core {
 
 typedef struct Game {
 	char path[MAX_PATH];
+	char bundle_path[MAX_PATH];
 	char name[MAX_PATH];
 	char m3u_path[MAX_PATH];
 	char tmp_path[MAX_PATH];

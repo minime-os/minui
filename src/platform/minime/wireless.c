@@ -5,7 +5,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include "wifi_backend.h"
+#include "wireless.h"
+#include "traits.h"
 
 #define WIFI_CONFIG_PATH "/mnt/sdcard/.minime/config/wifi.cfg"
 
@@ -25,12 +26,40 @@ struct wifi_network {
 static struct wifi_network scanned_networks[MAX_NETWORKS];
 static int scanned_count = 0;
 
+static const char *wifi_interface(void) {
+	const MinimeTraits *traits = MINIME_traits();
+
+	return traits ? traits->wifi_interface : "na";
+}
+
+int MINIME_wirelessHasWifi(void) {
+	return MINIME_traitAvailable(wifi_interface());
+}
+
+static FILE *wifi_cli(const char *command) {
+	char shell[256];
+
+	snprintf(shell, sizeof(shell), "wpa_cli -i '%s' %s 2>/dev/null",
+		wifi_interface(), command);
+	return popen(shell, "r");
+}
+
 static int is_wifi_interface_present(void) {
-	return access("/sys/class/net/wlan0", F_OK) == 0;
+	char path[256];
+
+	if (!MINIME_wirelessHasWifi())
+		return 0;
+	snprintf(path, sizeof(path), "/sys/class/net/%s", wifi_interface());
+	return access(path, F_OK) == 0;
 }
 
 static int is_wifi_interface_up(void) {
-	FILE* f = fopen("/sys/class/net/wlan0/operstate", "r");
+	char path[256];
+	FILE* f;
+
+	snprintf(path, sizeof(path), "/sys/class/net/%s/operstate",
+		wifi_interface());
+	f = fopen(path, "r");
 	if (!f) return 0;
 	char state[16] = {0};
 	int up = 0;
@@ -45,7 +74,7 @@ static int is_wifi_interface_up(void) {
 
 static void get_connected_ssid(char* ssid_out, size_t max_len) {
 	ssid_out[0] = '\0';
-	FILE* f = popen("wpa_cli -i wlan0 status 2>/dev/null", "r");
+	FILE* f = wifi_cli("status");
 	if (!f) return;
 	char line[128];
 	while (fgets(line, sizeof(line), f)) {
@@ -165,7 +194,7 @@ static void add_network_to_config(const char* ssid, const char* passphrase) {
 
 static void parse_scan_results(void) {
 	scanned_count = 0;
-	FILE* f = popen("wpa_cli -i wlan0 scan_results 2>/dev/null", "r");
+	FILE* f = wifi_cli("scan_results");
 	if (!f) return;
 	char line[256];
 	
@@ -248,7 +277,7 @@ static void parse_scan_results(void) {
 
 ///////////////////////////////////////
 
-int SETTINGS_WIFI_BACKEND_init(void) {
+int MINIME_wirelessWifiInit(void) {
 	wifi_enabled = is_wifi_interface_present() && is_wifi_interface_up();
 	wifi_scanning = 0;
 	connected_ssid[0] = '\0';
@@ -256,11 +285,7 @@ int SETTINGS_WIFI_BACKEND_init(void) {
 	return 0;
 }
 
-void SETTINGS_WIFI_BACKEND_quit(void) {
-	// No-op
-}
-
-int SETTINGS_WIFI_BACKEND_refresh(struct settings_snapshot *snapshot) {
+int MINIME_wirelessWifiRefresh(struct settings_snapshot *snapshot) {
 	if (!snapshot) return -1;
 	
 	wifi_enabled = is_wifi_interface_present() && is_wifi_interface_up();
@@ -296,7 +321,7 @@ int SETTINGS_WIFI_BACKEND_refresh(struct settings_snapshot *snapshot) {
 	return 0;
 }
 
-int SETTINGS_WIFI_BACKEND_set_enabled(int enabled) {
+int MINIME_wirelessWifiSetEnabled(int enabled) {
 	if (enabled) {
 		system("/etc/init.d/S45wifi start");
 		wifi_enabled = 1;
@@ -307,9 +332,12 @@ int SETTINGS_WIFI_BACKEND_set_enabled(int enabled) {
 	return 0;
 }
 
-int SETTINGS_WIFI_BACKEND_set_scanning(int enabled) {
+int MINIME_wirelessWifiSetScanning(int enabled) {
 	if (enabled && wifi_enabled) {
-		system("wpa_cli -i wlan0 scan >/dev/null 2>&1");
+		char command[256];
+		snprintf(command, sizeof(command),
+			"wpa_cli -i '%s' scan >/dev/null 2>&1", wifi_interface());
+		system(command);
 		wifi_scanning = 1;
 	} else {
 		wifi_scanning = 0;
@@ -317,7 +345,7 @@ int SETTINGS_WIFI_BACKEND_set_scanning(int enabled) {
 	return 0;
 }
 
-int SETTINGS_WIFI_BACKEND_connect(const char *ssid, const char *passphrase, int hidden) {
+int MINIME_wirelessWifiConnect(const char *ssid, const char *passphrase, int hidden) {
 	(void)hidden;
 	if (!ssid) return -1;
 	
@@ -330,13 +358,16 @@ int SETTINGS_WIFI_BACKEND_connect(const char *ssid, const char *passphrase, int 
 	return 0;
 }
 
-int SETTINGS_WIFI_BACKEND_disconnect(void) {
-	system("wpa_cli -i wlan0 disconnect >/dev/null 2>&1");
+int MINIME_wirelessWifiDisconnect(void) {
+	char command[256];
+	snprintf(command, sizeof(command),
+		"wpa_cli -i '%s' disconnect >/dev/null 2>&1", wifi_interface());
+	system(command);
 	connected_ssid[0] = '\0';
 	return 0;
 }
 
-int SETTINGS_WIFI_BACKEND_forget(const char *ssid) {
+int MINIME_wirelessWifiForget(const char *ssid) {
 	if (!ssid) return -1;
 	remove_network_from_config(ssid);
 	system("/etc/init.d/S45wifi restart");
