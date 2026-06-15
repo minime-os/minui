@@ -13,4 +13,4 @@ config BR2_PACKAGE_MINUI
 	select BR2_PACKAGE_DBUS
 	select BR2_PACKAGE_LIBRETRO_COMMON
 	help
-	  Upstream MinUI frontend package for the RG35xxSP Buildroot image.
+	  MinUI fork package with extra features
