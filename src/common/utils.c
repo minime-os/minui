@@ -225,6 +225,17 @@ void putInt(char* path, int value) {
 	putFile(path, buffer);
 }
 
+char* trim(char* text) {
+	char *end;
+	while (*text && isspace((unsigned char)*text))
+		text++;
+	end = text + strlen(text);
+	while (end > text && isspace((unsigned char)end[-1]))
+		end--;
+	*end = '\0';
+	return text;
+}
+
 uint64_t getMicroseconds(void) {
     uint64_t ret;
     struct timeval tv;

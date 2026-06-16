@@ -3,27 +3,13 @@
 
 #include "audio.h"
 #include "traits.h"
-
-static int readInt(const char *path)
-{
-	FILE *file;
-	int value = 0;
-
-	if (!MINIME_traitAvailable(path))
-		return 0;
-	file = fopen(path, "r");
-	if (file) {
-		(void)fscanf(file, "%d", &value);
-		fclose(file);
-	}
-	return value;
-}
+#include "utils.h"
 
 int MINIME_audioJackConnected(void)
 {
 	const MinimeTraits *traits = MINIME_traits();
 
-	return traits ? readInt(traits->jack_state_path) : 0;
+	return (traits && MINIME_traitAvailable(traits->jack_state_path)) ? getInt((char*)traits->jack_state_path) : 0;
 }
 
 void MINIME_audioSetRawVolume(int value)

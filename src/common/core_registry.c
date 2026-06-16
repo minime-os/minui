@@ -14,18 +14,6 @@ typedef struct CoreEntry {
 	char filename[128];
 } CoreEntry;
 
-static char *trim(char *text)
-{
-	char *end;
-
-	while (*text && isspace((unsigned char)*text))
-		text++;
-	end = text + strlen(text);
-	while (end > text && isspace((unsigned char)end[-1]))
-		end--;
-	*end = '\0';
-	return text;
-}
 
 static int findCore(const char *system, CoreEntry *entry)
 {

@@ -17,6 +17,7 @@ void getEmuPath(char* emu_name, char* core_path);
 void normalizeNewline(char* line);
 void trimTrailingNewlines(char* line);
 void trimSortingMeta(char** str);
+char* trim(char* text);
 
 int exists(char* path);
 void touch(char* path);

@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "traits.h"
+#include "utils.h"
 
 #define TRAITS_PATH "/mnt/sdcard/.minime/traits"
 #define NA "na"
@@ -19,18 +20,6 @@ static void copyText(char *dst, size_t size, const char *src)
 	snprintf(dst, size, "%s", src ? src : "");
 }
 
-static char *trim(char *text)
-{
-	char *end;
-
-	while (*text && isspace((unsigned char)*text))
-		text++;
-	end = text + strlen(text);
-	while (end > text && isspace((unsigned char)end[-1]))
-		end--;
-	*end = '\0';
-	return text;
-}
 
 static int parseInt(const char *value)
 {

@@ -4,56 +4,17 @@
 
 #include "power.h"
 #include "traits.h"
-
-static int readInt(const char *path, int *value)
-{
-	FILE *file;
-
-	if (!MINIME_traitAvailable(path) || !value)
-		return -1;
-	file = fopen(path, "r");
-	if (!file)
-		return -1;
-	if (fscanf(file, "%d", value) != 1) {
-		fclose(file);
-		return -1;
-	}
-	fclose(file);
-	return 0;
-}
-
-static void writeInt(const char *path, int value)
-{
-	FILE *file;
-
-	if (!MINIME_traitAvailable(path))
-		return;
-	file = fopen(path, "w");
-	if (!file)
-		return;
-	fprintf(file, "%d\n", value);
-	fclose(file);
-}
-
-static void writeText(const char *path, const char *value)
-{
-	FILE *file;
-
-	if (!MINIME_traitAvailable(path))
-		return;
-	file = fopen(path, "w");
-	if (!file)
-		return;
-	fputs(value, file);
-	fclose(file);
-}
+#include "utils.h"
 
 static int readCapacity(const char *root, int *capacity)
 {
 	char path[MINIME_TRAIT_PATH_MAX + 32];
 
 	snprintf(path, sizeof(path), "%s/capacity", root);
-	return readInt(path, capacity);
+	if (!MINIME_traitAvailable(path) || !capacity)
+		return -1;
+	*capacity = getInt(path);
+	return 0;
 }
 
 static int readCharging(const MinimeTraits *traits, int *charging)
@@ -62,8 +23,10 @@ static int readCharging(const MinimeTraits *traits, int *charging)
 	char status[32];
 	FILE *file;
 
-	if (readInt(traits->charger_online_path, charging) == 0)
+	if (MINIME_traitAvailable(traits->charger_online_path)) {
+		*charging = getInt((char*)traits->charger_online_path);
 		return 0;
+	}
 	if (!MINIME_traitAvailable(traits->battery_capacity_path))
 		return -1;
 	snprintf(path, sizeof(path), "%s/status", traits->battery_capacity_path);
@@ -96,8 +59,8 @@ int MINIME_powerReadLid(void)
 	const MinimeTraits *traits = MINIME_traits();
 	int value = 1;
 
-	if (traits)
-		(void)readInt(traits->lid_switch_path, &value);
+	if (traits && MINIME_traitAvailable(traits->lid_switch_path))
+		value = getInt((char*)traits->lid_switch_path);
 	return value;
 }
 
@@ -105,16 +68,16 @@ void MINIME_powerSetLED(int enabled)
 {
 	const MinimeTraits *traits = MINIME_traits();
 
-	if (traits)
-		writeInt(traits->power_led_path, enabled);
+	if (traits && MINIME_traitAvailable(traits->power_led_path))
+		putInt((char*)traits->power_led_path, enabled);
 }
 
 void MINIME_powerSetRumble(int enabled)
 {
 	const MinimeTraits *traits = MINIME_traits();
 
-	if (traits)
-		writeInt(traits->rumble_path, enabled);
+	if (traits && MINIME_traitAvailable(traits->rumble_path))
+		putInt((char*)traits->rumble_path, enabled);
 }
 
 void MINIME_powerSetCPUSpeed(int speed)
@@ -122,7 +85,7 @@ void MINIME_powerSetCPUSpeed(int speed)
 	const MinimeTraits *traits = MINIME_traits();
 	const char *governor;
 
-	if (!traits)
+	if (!traits || !MINIME_traitAvailable(traits->cpu_governor_path))
 		return;
 	if (speed <= 1)
 		governor = "powersave";
@@ -130,5 +93,5 @@ void MINIME_powerSetCPUSpeed(int speed)
 		governor = "performance";
 	else
 		governor = "schedutil";
-	writeText(traits->cpu_governor_path, governor);
+	putFile((char*)traits->cpu_governor_path, (char*)governor);
 }

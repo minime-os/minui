@@ -7,6 +7,7 @@
 
 #include "wireless.h"
 #include "traits.h"
+#include "utils.h"
 
 #define WIFI_CONFIG_PATH "/mnt/sdcard/.minime/config/wifi.cfg"
 
@@ -50,7 +51,7 @@ static int is_wifi_interface_present(void) {
 	if (!MINIME_wirelessHasWifi())
 		return 0;
 	snprintf(path, sizeof(path), "/sys/class/net/%s", wifi_interface());
-	return access(path, F_OK) == 0;
+	return exists(path);
 }
 
 static int is_wifi_interface_up(void) {

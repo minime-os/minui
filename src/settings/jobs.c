@@ -450,7 +450,7 @@ static int jobs_apply_timezone(int offset_minutes)
 		offset_minutes = SETTINGS_TIMEZONE_DEFAULT_OFFSET_MINUTES;
 	SETTINGS_TIMEZONE_formatZoneId(offset_minutes, zone_id, sizeof(zone_id));
 	snprintf(target, sizeof(target), "../usr/share/zoneinfo/%s", zone_id);
-	if (access(LOCALTIME_TMP_PATH, F_OK) == 0)
+	if (exists(LOCALTIME_TMP_PATH))
 		unlink(LOCALTIME_TMP_PATH);
 	if (symlink(target, LOCALTIME_TMP_PATH) != 0)
 		return -errno;
@@ -511,7 +511,7 @@ static int jobs_write_power_policy(void)
 
 static int jobs_pidfile_exists(const char *path)
 {
-	return path && access(path, F_OK) == 0;
+	return path && exists((char*)path);
 }
 
 static void jobs_parse_release(struct settings_snapshot *snapshot)
