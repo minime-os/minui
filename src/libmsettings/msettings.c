@@ -77,9 +77,6 @@ void InitSettings(void) {
 			memcpy(settings, &DefaultSettings, shm_size);
 		}
 		
-		// these shouldn't be persisted
-		// settings->jack = 0;
-		// settings->hdmi = 0;
 	}
 	
 	// both of these set volume
@@ -87,7 +84,6 @@ void InitSettings(void) {
 	SetHDMI(MINIME_videoHDMIConnected());
 	
 	SetBrightness(GetBrightness());
-	// system("echo $(< " BRIGHTNESS_PATH ")");
 }
 void QuitSettings(void) {
 	munmap(settings, shm_size);
@@ -156,27 +152,15 @@ int GetJack(void) {
 	return settings->jack;
 }
 void SetJack(int value) {
-	// printf("SetJack(%i)\n", value); fflush(stdout);
-	
-	// char cmd[256];
-	// sprintf(cmd, "amixer cset name='Playback Path' '%s' &> /dev/null", value?"HP":"SPK");
-	// system(cmd);
-	
 	settings->jack = value;
 	SetVolume(GetVolume());
 }
 
-int GetHDMI(void) {	
-	// printf("GetHDMI() %i\n", settings->hdmi); fflush(stdout);
+int GetHDMI(void) {
 	return settings->hdmi;
 }
 void SetHDMI(int value) {
-	// printf("SetHDMI(%i)\n", value); fflush(stdout);
-	
 	settings->hdmi = value;
 	if (value) SetRawVolume(100); // max
 	else SetVolume(GetVolume()); // restore
 }
-
-int GetMute(void) { return 0; }
-void SetMute(int value) {}

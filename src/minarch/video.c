@@ -316,20 +316,6 @@ static int MSG_blitInt(int num, int x, int y)
 	return x;
 }
 
-static int MSG_blitDouble(double num, int x, int y)
-{
-	int i = num;
-	int r = (num - i) * 10;
-	int n;
-
-	x = MSG_blitInt(i, x, y);
-	n = DIGIT_DOT;
-	x = MSG_blitChar(n, x, y);
-	n = r;
-	x = MSG_blitChar(n, x, y);
-	return x;
-}
-
 void MSG_quit(void)
 {
 	SDL_FreeSurface(digits);

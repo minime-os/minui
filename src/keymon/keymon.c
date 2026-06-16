@@ -5,6 +5,7 @@
 #include <string.h>
 #include <linux/input.h>
 #include <pthread.h>
+#include <time.h>
 
 #include <msettings.h>
 
@@ -14,8 +15,6 @@
 #include "input.h"
 #include "traits.h"
 #include "video.h"
-
-// #include "defines.h"
 
 #define VOLUME_MIN 		0
 #define VOLUME_MAX 		20
@@ -29,6 +28,12 @@
 
 static int input_fds[4] = {0};
 static int input_count = 0;
+
+static uint32_t now_ms(void) {
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (uint32_t)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
+}
 
 static pthread_t hdmi_pt;
 
@@ -78,15 +83,12 @@ int main (int argc, char *argv[]) {
 	uint8_t ignore;
 	uint32_t then;
 	uint32_t now;
-	struct timeval tod;
 	
-	gettimeofday(&tod, NULL);
-	then = tod.tv_sec * 1000 + tod.tv_usec / 1000; // essential SDL_GetTicks()
+	then = now_ms(); // essential SDL_GetTicks()
 	ignore = 0;
 	
 	while (1) {
-		gettimeofday(&tod, NULL);
-		now = tod.tv_sec * 1000 + tod.tv_usec / 1000;
+		now = now_ms();
 		// TODO: check if if necessary
 		if (now-then>1000) ignore = 1; // ignore input that arrived during sleep
 		
@@ -120,12 +122,10 @@ int main (int argc, char *argv[]) {
 		
 		if (up_just_pressed || (up_pressed && now>=up_repeat_at)) {
 			if (menu_pressed) {
-				// printf("brightness up\n"); fflush(stdout);
 				val = GetBrightness();
 				if (val<BRIGHTNESS_MAX) SetBrightness(++val);
 			}
 			else {
-				// printf("volume up\n"); fflush(stdout);
 				val = GetVolume();
 				if (val<VOLUME_MAX) SetVolume(++val);
 			}
@@ -136,12 +136,10 @@ int main (int argc, char *argv[]) {
 		
 		if (down_just_pressed || (down_pressed && now>=down_repeat_at)) {
 			if (menu_pressed) {
-				// printf("brightness down\n"); fflush(stdout);
 				val = GetBrightness();
 				if (val>BRIGHTNESS_MIN) SetBrightness(--val);
 			}
 			else {
-				// printf("volume down\n"); fflush(stdout);
 				val = GetVolume();
 				if (val>VOLUME_MIN) SetVolume(--val);
 			}

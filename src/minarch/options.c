@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "minarch.h"
 
 ///////////////////////////////////////
@@ -259,7 +260,7 @@ void OptionList_setOptionRawValue(OptionList *list, const char *key, int value)
 		item->value = value;
 		list->changed = 1;
 		if (exactMatch(core.tag, "GB") &&
-			containsString(item->key, "palette")) {
+			strcasestr(item->key, "palette")) {
 			Special_updatedDMGPalette(3);
 		}
 	} else {
@@ -276,7 +277,7 @@ void OptionList_setOptionValue(OptionList *list, const char *key,
 		Option_setValue(item, value);
 		list->changed = 1;
 		if (exactMatch(core.tag, "GB") &&
-			containsString(item->key, "palette")) {
+			strcasestr(item->key, "palette")) {
 			Special_updatedDMGPalette(2);
 		}
 	} else {

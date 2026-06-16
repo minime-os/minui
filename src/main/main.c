@@ -648,7 +648,6 @@ static int hasRecents(void) {
 			trimTrailingNewlines(line);
 			if (strlen(line)==0) continue; // skip empty lines
 			
-			// LOG_info("line: %s\n", line);
 			
 			char* path = line;
 			char* alias = NULL;
@@ -683,7 +682,6 @@ static int hasRecents(void) {
 						Array_push(parent_paths, strdup(parent_path));
 					}
 					
-					// LOG_info("path:%s alias:%s\n", path, alias);
 					
 					Recent* recent = Recent_new(path, alias);
 					if (recent->available) has += 1;
@@ -1452,9 +1450,6 @@ static void Menu_quit(void) {
 ///////////////////////////////////////
 
 int main (int argc, char *argv[]) {
-	// LOG_info("time from launch to:\n");
-	// unsigned long main_begin = SDL_GetTicks();
-	// unsigned long first_draw = 0;
 	
 	if (autoResume()) return 0; // nothing to do
 	
@@ -1463,17 +1458,13 @@ int main (int argc, char *argv[]) {
 	InitSettings();
 	
 	SDL_Surface* screen = GFX_init(MODE_MAIN);
-	// LOG_info("- graphics init: %lu\n", SDL_GetTicks() - main_begin);
 	
 	PAD_init();
-	// LOG_info("- input init: %lu\n", SDL_GetTicks() - main_begin);
 	
 	PWR_init();
 	if (!HAS_POWER_BUTTON && !simple_mode) PWR_disableSleep();
-	// LOG_info("- power init: %lu\n", SDL_GetTicks() - main_begin);
 	
 	Menu_init();
-	// LOG_info("- menu init: %lu\n", SDL_GetTicks() - main_begin);
 	SETTINGS_init();
 	
 	// now that (most of) the heavy lifting is done, take a load off
@@ -1486,7 +1477,6 @@ int main (int argc, char *argv[]) {
 	int show_setting = 0; // 1=brightness,2=volume
 	int was_online = PLAT_isOnline();
 	
-	// LOG_info("- loop start: %lu\n", SDL_GetTicks() - main_begin);
 	while (!quit) {
 		GFX_startFrame();
 		unsigned long now = SDL_GetTicks();
@@ -1793,10 +1783,6 @@ int main (int argc, char *argv[]) {
 		}
 		else GFX_sync();
 		
-		// if (!first_draw) {
-		// 	first_draw = SDL_GetTicks();
-		// 	LOG_info("- first draw: %lu\n", first_draw - main_begin);
-		// }
 		
 		// handle HDMI change
 		static int had_hdmi = -1;

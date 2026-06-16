@@ -347,20 +347,20 @@ static int jobs_ensure_state_dir(const char *path)
 	return 0;
 }
 
-static int jobs_write_state_int(const char *path, const char *key, int value)
+static int jobs_atomic_write_file(const char *path, const char *content)
 {
 	char tmp[320];
 	FILE *file;
 	int fd;
 
-	if (!path || !key)
+	if (!path || !content)
 		return -EINVAL;
 	jobs_ensure_state_dir(path);
 	snprintf(tmp, sizeof(tmp), "%s.tmp", path);
 	file = fopen(tmp, "w");
 	if (!file)
 		return -errno;
-	fprintf(file, "%s=%d\n", key, value ? 1 : 0);
+	fputs(content, file);
 	fflush(file);
 	fd = fileno(file);
 	if (fd >= 0)
@@ -373,30 +373,11 @@ static int jobs_write_state_int(const char *path, const char *key, int value)
 	return 0;
 }
 
-static int jobs_write_state_number(const char *path, const char *key, int value)
+static int jobs_write_state(const char *path, const char *key, int value)
 {
-	char tmp[320];
-	FILE *file;
-	int fd;
-
-	if (!path || !key)
-		return -EINVAL;
-	jobs_ensure_state_dir(path);
-	snprintf(tmp, sizeof(tmp), "%s.tmp", path);
-	file = fopen(tmp, "w");
-	if (!file)
-		return -errno;
-	fprintf(file, "%s=%d\n", key, value);
-	fflush(file);
-	fd = fileno(file);
-	if (fd >= 0)
-		fsync(fd);
-	fclose(file);
-	if (rename(tmp, path) != 0) {
-		unlink(tmp);
-		return -errno;
-	}
-	return 0;
+	char buf[128];
+	snprintf(buf, sizeof(buf), "%s=%d\n", key, value);
+	return jobs_atomic_write_file(path, buf);
 }
 
 static int jobs_read_state_number(const char *path, const char *key, int *value)
@@ -481,32 +462,18 @@ static int jobs_apply_timezone(int offset_minutes)
 
 static int jobs_write_power_policy(void)
 {
-	char tmp[320];
-	FILE *file;
-	int fd;
+	char buf[320];
 
-	jobs_ensure_state_dir(POWER_POLICY_FILE);
-	snprintf(tmp, sizeof(tmp), "%s.tmp", POWER_POLICY_FILE);
-	file = fopen(tmp, "w");
-	if (!file)
-		return -errno;
-
-	fprintf(file, "sleep_timeout_ms=%d\n", PWR_getSleepTimeoutMs());
-	fprintf(file, "auto_shutdown_timeout_ms=%d\n",
-		PWR_getAutoShutdownTimeoutMs());
-	fprintf(file, "lid_behavior=%d\n", PWR_getLidBehavior());
-	fprintf(file, "power_button_behavior=%d\n",
+	snprintf(buf, sizeof(buf),
+		"sleep_timeout_ms=%d\n"
+		"auto_shutdown_timeout_ms=%d\n"
+		"lid_behavior=%d\n"
+		"power_button_behavior=%d\n",
+		PWR_getSleepTimeoutMs(),
+		PWR_getAutoShutdownTimeoutMs(),
+		PWR_getLidBehavior(),
 		PWR_getPowerButtonBehavior());
-	fflush(file);
-	fd = fileno(file);
-	if (fd >= 0)
-		fsync(fd);
-	fclose(file);
-	if (rename(tmp, POWER_POLICY_FILE) != 0) {
-		unlink(tmp);
-		return -errno;
-	}
-	return 0;
+	return jobs_atomic_write_file(POWER_POLICY_FILE, buf);
 }
 
 static int jobs_pidfile_exists(const char *path)
@@ -647,7 +614,7 @@ static void jobs_handle_wifi_toggle(const struct settings_job *job)
 		jobs_set_error_prompt("Wi-Fi", "Wi-Fi change failed.", NULL);
 		return;
 	}
-	(void)jobs_write_state_int(WIFI_STATE_FILE, "wifi_enabled",
+	(void)jobs_write_state(WIFI_STATE_FILE, "wifi_enabled",
 		job->value ? 1 : 0);
 	jobs.wifi_scan_after = 0;
 	if (!job->value)
@@ -677,7 +644,7 @@ static void jobs_handle_wifi_connect(const struct settings_job *job)
 		jobs_set_error_prompt("Wi-Fi", "Wi-Fi connect failed.", job->arg);
 		return;
 	}
-	(void)jobs_write_state_int(WIFI_STATE_FILE, "wifi_enabled", 1);
+	(void)jobs_write_state(WIFI_STATE_FILE, "wifi_enabled", 1);
 }
 
 static void jobs_handle_wifi_disconnect(const struct settings_job *job)
@@ -714,7 +681,7 @@ static void jobs_handle_bt_toggle(const struct settings_job *job)
 			NULL);
 		return;
 	}
-	(void)jobs_write_state_int(BT_STATE_FILE, "bluetooth_enabled",
+	(void)jobs_write_state(BT_STATE_FILE, "bluetooth_enabled",
 		job->value ? 1 : 0);
 	if (!job->value)
 		jobs_bt_pending_clear();
@@ -791,7 +758,7 @@ static void jobs_handle_timezone_set(const struct settings_job *job)
 		jobs_set_error_prompt("Time", "Timezone update failed.", NULL);
 		return;
 	}
-	if (jobs_write_state_number(TIMEZONE_STATE_FILE, "gmt_offset_minutes",
+	if (jobs_write_state(TIMEZONE_STATE_FILE, "gmt_offset_minutes",
 			job->timezone_offset_minutes) != 0) {
 		jobs_set_error_prompt("Time", "Timezone update failed.", NULL);
 		return;
@@ -893,9 +860,6 @@ static void jobs_handle_job(const struct settings_job *job)
 		break;
 	case SETTINGS_JOB_POWER_VOLUME:
 		SetVolume(job->value);
-		break;
-	case SETTINGS_JOB_POWER_MUTE:
-		SetMute(job->value);
 		break;
 	case SETTINGS_JOB_TIME_SYNC:
 		jobs_handle_time_sync();

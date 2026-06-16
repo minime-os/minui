@@ -27,11 +27,6 @@ void LOG_note(int level, const char* fmt, ...) {
 	vsnprintf(buf, sizeof(buf), fmt, args);
 	va_end(args);
 	switch(level) {
-#ifdef DEBUG
-	case LOG_DEBUG:
-		printf("[DEBUG] %s", buf);
-		break;
-#endif
 	case LOG_INFO:
 		printf("[INFO] %s", buf);
 		break;
@@ -626,7 +621,6 @@ scaler_t GFX_getAAScaler(GFX_Renderer* renderer) {
 	
 	double blend_denominator = (renderer->src_w>renderer->dst_w) ? 5 : 2.5; // TODO: these values are really only good for the nano...
 	// blend_denominator = 5.0; // better for trimui
-	// LOG_info("blend_denominator: %f (%i && %i)\n", blend_denominator, HAS_SKINNY_SCREEN, renderer->dst_w>renderer->src_w);
 	
 	div_w = round(blend_args.w_ratio_out / blend_denominator);
 	blend_args.w_bp[0] = div_w;
@@ -707,7 +701,6 @@ void GFX_blitRect(int asset, SDL_Surface* dst, SDL_Rect* dst_rect) {
 	GFX_blitAsset(asset, &(SDL_Rect){r,r,r,r}, dst, &(SDL_Rect){x+w-r,y+h-r});
 }
 void GFX_blitBattery(SDL_Surface* dst, SDL_Rect* dst_rect) {
-	// LOG_info("dst: %p\n", dst);
 	int x = 0;
 	int y = 0;
 	if (dst_rect) {
@@ -795,7 +788,6 @@ void GFX_blitButton(char* hint, char*button, SDL_Surface* dst, SDL_Rect* dst_rec
 void GFX_blitMessage(TTF_Font* font, char* msg, SDL_Surface* dst, SDL_Rect* dst_rect) {
 	if (!dst_rect) dst_rect = &(SDL_Rect){0,0,dst->w,dst->h};
 	
-	// LOG_info("GFX_blitMessage: %p (%ix%i)", dst, dst_rect->w,dst_rect->h);
 	
 	SDL_Surface* text;
 #define TEXT_BOX_MAX_ROWS 16
@@ -1094,7 +1086,6 @@ static struct SND_Context {
 } snd = {0};
 static void SND_audioCallback(void* userdata, uint8_t* stream, int len) { // plat_sound_callback
 	
-	// return (void)memset(stream,0,len); // TODO: tmp, silent
 	
 	if (snd.frame_count==0) return;
 	
@@ -1102,7 +1093,6 @@ static void SND_audioCallback(void* userdata, uint8_t* stream, int len) { // pla
 	len /= (sizeof(int16_t) * 2);
 	// int full_len = len;
 	
-	// if (snd.frame_out!=snd.frame_in) LOG_info("%8i consuming samples (%i frames)\n", ms(), len);
 	
 	while (snd.frame_out!=snd.frame_in && len>0) {
 		*out++ = snd.buffer[snd.frame_out].left;
@@ -1118,7 +1108,6 @@ static void SND_audioCallback(void* userdata, uint8_t* stream, int len) { // pla
 	
 	int zero = len>0 && len==SAMPLES;
 	if (zero) return (void)memset(out,0,len*(sizeof(int16_t) * 2));
-	// else if (len>=5) LOG_info("%8i BUFFER UNDERRUN (%i/%i frames)\n", ms(), len,full_len);
 
 	int16_t *in = out-1;
 	while (len>0) {
@@ -1131,7 +1120,6 @@ static void SND_resizeBuffer(void) { // plat_sound_resize_buffer
 	snd.frame_count = snd.buffer_seconds * snd.sample_rate_in / snd.frame_rate;
 	if (snd.frame_count==0) return;
 	
-	// LOG_info("frame_count: %i (%i * %i / %f)\n", snd.frame_count, snd.buffer_seconds, snd.sample_rate_in, snd.frame_rate);
 	// snd.frame_count *= 2; // no help
 	
 	SDL_LockAudio();
@@ -1179,11 +1167,9 @@ static void SND_selectResampler(void) { // plat_sound_select_resampler
 }
 size_t SND_batchSamples(const SND_Frame* frames, size_t frame_count) { // plat_sound_write / plat_sound_write_resample
 	
-	// return frame_count; // TODO: tmp, silent
 	
 	if (snd.frame_count==0) return 0;
 	
-	// LOG_info("%8i batching samples (%i frames)\n", ms(), frame_count);
 	
 	SDL_LockAudio();
 
@@ -1199,7 +1185,6 @@ size_t SND_batchSamples(const SND_Frame* frames, size_t frame_count) { // plat_s
 			SDL_Delay(1);
 			SDL_LockAudio();
 		}
-		// if (tries) LOG_info("%8i waited %ims for buffer to get low...\n", ms(), tries);
 
 		while (amount && snd.frame_in != snd.frame_filled) {
 			consumed_frames = snd.resample(*frames);
@@ -1282,7 +1267,6 @@ PAD_Context pad;
 
 #define AXIS_DEADZONE 0x4000
 void PAD_setAnalog(int neg_id,int pos_id,int value,int repeat_at) {
-	// LOG_info("neg %i pos %i value %i\n", neg_id, pos_id, value);
 	int neg = 1 << neg_id;
 	int pos = 1 << pos_id;	
 	if (value>AXIS_DEADZONE) { // pressing
@@ -1328,7 +1312,6 @@ void PAD_setAnalog(int neg_id,int pos_id,int value,int repeat_at) {
 }
 
 void PAD_reset(void) {
-	// LOG_info("PAD_reset");
 	pad.just_pressed = BTN_NONE;
 	pad.is_pressed = BTN_NONE;
 	pad.just_released = BTN_NONE;
@@ -1358,7 +1341,6 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void) {
 		if (event.type==SDL_KEYDOWN || event.type==SDL_KEYUP) {
 			uint8_t code = event.key.keysym.scancode;
 			pressed = event.type==SDL_KEYDOWN;
-			// LOG_info("key event: %i (%i)\n", code,pressed);
 				 if (code==CODE_UP) 		{ btn = BTN_DPAD_UP; 		id = BTN_ID_DPAD_UP; }
  			else if (code==CODE_DOWN)		{ btn = BTN_DPAD_DOWN; 		id = BTN_ID_DPAD_DOWN; }
 			else if (code==CODE_LEFT)		{ btn = BTN_DPAD_LEFT; 		id = BTN_ID_DPAD_LEFT; }
@@ -1385,7 +1367,6 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void) {
 		else if (event.type==SDL_JOYBUTTONDOWN || event.type==SDL_JOYBUTTONUP) {
 			uint8_t joy = event.jbutton.button;
 			pressed = event.type==SDL_JOYBUTTONDOWN;
-			// LOG_info("joy event: %i (%i)\n", joy,pressed);
 				 if (joy==JOY_UP) 		{ btn = BTN_DPAD_UP; 		id = BTN_ID_DPAD_UP; }
  			else if (joy==JOY_DOWN)		{ btn = BTN_DPAD_DOWN; 		id = BTN_ID_DPAD_DOWN; }
 			else if (joy==JOY_LEFT)		{ btn = BTN_DPAD_LEFT; 		id = BTN_ID_DPAD_LEFT; }
@@ -1412,7 +1393,6 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void) {
 		else if (event.type==SDL_JOYHATMOTION) {
 			int hats[4] = {-1,-1,-1,-1}; // -1=no change,0=up,1=down,2=left,3=right btn_ids
 			int hat = event.jhat.value;
-			// LOG_info("hat event: %i\n", hat);
 			// TODO: safe to assume hats will always be the primary dpad?
 			// TODO: this is literally a bitmask, make it one (oh, except there's 3 states...)
 			switch (hat) {
@@ -1448,7 +1428,6 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void) {
 		else if (event.type==SDL_JOYAXISMOTION) {
 			int axis = event.jaxis.axis;
 			int val = event.jaxis.value;
-			// LOG_info("axis: %i (%i)\n", axis,val);
 			
 			// triggers on tg5040
 			if (axis==AXIS_L2) {
@@ -1471,11 +1450,9 @@ FALLBACK_IMPLEMENTATION void PLAT_pollInput(void) {
 			// before the first press but you can't release
 			// a button that wasn't pressed
 			if (!pressed && btn!=BTN_NONE && !(pad.is_pressed & btn)) {
-				// LOG_info("cancel: %i\n", axis);
 				btn = BTN_NONE;
 			}
 		}
-		// else if (event.type==SDL_QUIT) PWR_powerOff(); // added for macOS debug
 		
 		if (btn==BTN_NONE) continue;
 		
@@ -1702,8 +1679,6 @@ void PWR_update(int* _dirty, int* _show_setting, PWR_callback_t before_sleep, PW
 	static uint32_t setting_shown_at = 0; // timestamp when settings started being shown
 	static uint32_t power_pressed_at = 0; // timestamp when power button was just pressed
 	static uint32_t mod_unpressed_at = 0; // timestamp of last time settings modifier key was NOT down
-	static uint32_t was_muted = -1;
-	if (was_muted==-1) was_muted = GetMute();
 	
 	static int was_charging = -1;
 	if (was_charging==-1) was_charging = pwr.is_charging;
@@ -1795,13 +1770,6 @@ void PWR_update(int* _dirty, int* _show_setting, PWR_callback_t before_sleep, PW
 		}
 	}
 	
-	int muted = GetMute();
-	if (muted!=was_muted) {
-		was_muted = muted;
-		show_setting = 2;
-		setting_shown_at = now;
-	}
-	
 	if (show_setting) dirty = 1; // shm is slow or keymon is catching input on the next frame
 	if (_dirty) *_dirty = dirty;
 	if (_show_setting) *_show_setting = show_setting;
@@ -1835,7 +1803,6 @@ void PWR_powerOff(void) {
 		if (HAS_POWER_BUTTON || HAS_POWEROFF_BUTTON) msg = exists(AUTO_RESUME_PATH) ? "Quicksave created,\npowering off" : "Powering off";
 		else msg = exists(AUTO_RESUME_PATH) ? "Quicksave created,\npower off now" : "Power off now";
 		
-		// LOG_info("PWR_powerOff %s (%ix%i)\n", gfx.screen, gfx.screen->w, gfx.screen->h);
 		
 		// TODO: for some reason screen's dimensions end up being 0x0 in GFX_blitMessage...
 		PLAT_clearVideo(gfx.screen);

@@ -277,7 +277,6 @@ void PLAT_pollInput(void) {
 				continue;
 			}
 			else if (type==EV_ABS) {
-				// LOG_info("abs event: %i (%i)\n", code,value);
 				// { up, down, left, right }
 				if (code==RAW_HATY || code==RAW_HATX) {
 					if (value>1) continue; // ignore repeats
@@ -836,16 +835,13 @@ static void updateEffect(void) {
 		}
 	}
 	
-	// LOG_info("effect: %s opacity: %i\n", effect_path, opacity);
 	SDL_Surface* tmp = IMG_Load(effect_path);
 	if (tmp) {
 		if (effect.type==EFFECT_GRID) {
 			if (effect.color) {
-				// LOG_info("dmg color grid...\n");
 			
 				uint8_t r,g,b;
 				rgb565_to_rgb888(effect.color,&r,&g,&b);
-				// LOG_info("rgb %i,%i,%i\n",r,g,b);
 				
 				uint32_t* pixels = (uint32_t*)tmp->pixels;
 				int width = tmp->w;
@@ -879,7 +875,6 @@ void PLAT_vsync(int remaining) {
 }
 
 scaler_t PLAT_getScaler(GFX_Renderer* renderer) {
-	// LOG_info("getScaler for scale: %i\n", renderer->scale);
 	effect.next_scale = renderer->scale;
 	return scale1x1_c16;
 }
@@ -930,7 +925,6 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
 	
 	// uint32_t then = SDL_GetTicks();
 	SDL_UpdateTexture(vid.texture,NULL,vid.blit->src,vid.blit->src_p);
-	// LOG_info("blit blocked for %ims\n", SDL_GetTicks()-then);
 	
 	SDL_Texture* target = vid.texture;
 	int x = vid.blit->src_x;
@@ -964,14 +958,12 @@ void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
 		// oy = effect.scale - (dst_rect->y % effect.scale);
 		// if (ox==effect.scale) ox = 0;
 		// if (oy==effect.scale) oy = 0;
-		// LOG_info("rotate: %i ox: %i oy: %i\n", rotate, ox,oy);
 		if (rotate && !on_hdmi) SDL_RenderCopyEx(vid.renderer,vid.effect,&(SDL_Rect){0,0,dst_rect->w,dst_rect->h},&(SDL_Rect){ox+dst_rect->x,oy+dst_rect->y,dst_rect->w,dst_rect->h},rotate*90,NULL,SDL_FLIP_NONE);
 		else SDL_RenderCopy(vid.renderer, vid.effect, &(SDL_Rect){0,0,dst_rect->w,dst_rect->h},dst_rect);
 	}
 	
 	// uint32_t then = SDL_GetTicks();
 	SDL_RenderPresent(vid.renderer);
-	// LOG_info("SDL_RenderPresent blocked for %ims\n", SDL_GetTicks()-then);
 	vid.blit = NULL;
 }
 
