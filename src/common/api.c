@@ -391,12 +391,14 @@ int GFX_wrapText(TTF_Font* font, char* str, int max_width, int max_lines) {
 	int line_width;
 	int max_line_width = 0;
 	char* line = str;
-	char buffer[MAX_PATH];
+	char* buffer = malloc(strlen(str) + 1);
+	if (!buffer) return 0;
 	
 	TTF_SizeUTF8(font, line, &line_width, NULL);
 	if (line_width<=max_width) {
 		line_width = GFX_truncateText(font,line,buffer,max_width,0);
 		strcpy(line,buffer);
+		free(buffer);
 		return line_width;
 	}
 	
@@ -442,6 +444,7 @@ int GFX_wrapText(TTF_Font* font, char* str, int max_width, int max_lines) {
 	strcpy(line,buffer);
 	
 	if (line_width>max_line_width) max_line_width = line_width;
+	free(buffer);
 	return max_line_width;
 }
 

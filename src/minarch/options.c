@@ -95,9 +95,10 @@ void OptionList_init(const struct retro_core_option_definition *defs)
 		item->key = calloc(len, sizeof(char));
 		strcpy(item->key, def->key);
 
-		len = strlen(def->desc) + 1;
+		const char *option_name = getOptionNameFromKey(def->key, def->desc);
+		len = strlen(option_name) + 1;
 		item->name = calloc(len, sizeof(char));
-		strcpy(item->name, getOptionNameFromKey(def->key, def->desc));
+		strcpy(item->name, option_name);
 
 		if (def->info) {
 			len = strlen(def->info) + 1;
