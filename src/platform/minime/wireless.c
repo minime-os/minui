@@ -349,11 +349,12 @@ int MINIME_wirelessWifiSetScanning(int enabled) {
 int MINIME_wirelessWifiConnect(const char *ssid, const char *passphrase, int hidden) {
 	(void)hidden;
 	if (!ssid) return -1;
-	
-	if (passphrase && passphrase[0] != '\0') {
-		add_network_to_config(ssid, passphrase);
-	}
-	
+
+	// Save the network so it is known and can be reconnected after a
+	// reboot.  An empty/NULL passphrase means an open network.
+	add_network_to_config(ssid, (passphrase && passphrase[0] != '\0') ?
+		passphrase : "");
+
 	// Trigger wpa_supplicant configuration reload / connection attempt
 	system("/etc/init.d/S45wifi restart");
 	return 0;
