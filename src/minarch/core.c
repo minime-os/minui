@@ -298,11 +298,16 @@ bool environment_callback(unsigned cmd, void *data)
 	}
 	case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: {
 		const enum retro_pixel_format *format =
-			(enum retro_pixel_format *)data;
+			(const enum retro_pixel_format *)data;
 
-		if (*format != RETRO_PIXEL_FORMAT_RGB565)
-			return false;
-		break;
+		if (*format == RETRO_PIXEL_FORMAT_RGB565) {
+			core.pixel_format = RETRO_PIXEL_FORMAT_RGB565;
+			return true;
+		} else if (*format == RETRO_PIXEL_FORMAT_XRGB8888) {
+			core.pixel_format = RETRO_PIXEL_FORMAT_XRGB8888;
+			return true;
+		}
+		return false;
 	}
 	case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS: {
 		Input_init((const struct retro_input_descriptor *)data);

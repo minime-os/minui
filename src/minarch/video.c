@@ -20,6 +20,7 @@ static int fit = 0;
 #endif
 
 static void *buffer = NULL;
+static void *conv_buffer = NULL;
 static SDL_Surface *digits;
 
 #define DIGIT_WIDTH 9
@@ -359,10 +360,26 @@ static void blitBitmapText(char *text, int ox, int oy, uint16_t *data,
 
 void buffer_dealloc(void)
 {
-	if (!buffer)
-		return;
-	free(buffer);
-	buffer = NULL;
+	if (buffer) {
+		free(buffer);
+		buffer = NULL;
+	}
+	if (conv_buffer) {
+		free(conv_buffer);
+		conv_buffer = NULL;
+	}
+}
+
+static void conv_buffer_realloc(size_t size)
+{
+	static size_t conv_buffer_size = 0;
+	if (size > conv_buffer_size) {
+		if (conv_buffer) {
+			free(conv_buffer);
+		}
+		conv_buffer = malloc(size);
+		conv_buffer_size = size;
+	}
 }
 
 static void buffer_realloc(int w, int h, int p)
@@ -652,6 +669,26 @@ void video_refresh_callback(const void *data, unsigned width, unsigned height,
 {
 	if (!data)
 		return;
+
+	if (core.pixel_format == RETRO_PIXEL_FORMAT_XRGB8888) {
+		size_t needed_size = width * height * sizeof(uint16_t);
+		conv_buffer_realloc(needed_size);
+		const uint32_t *src = (const uint32_t *)data;
+		uint16_t *dst = (uint16_t *)conv_buffer;
+		for (unsigned y = 0; y < height; y++) {
+			for (unsigned x = 0; x < width; x++) {
+				uint32_t val = src[x];
+				uint16_t r = (val >> 19) & 0x1F;
+				uint16_t g = (val >> 10) & 0x3F;
+				uint16_t b = (val >> 3) & 0x1F;
+				dst[x] = (r << 11) | (g << 5) | b;
+			}
+			src = (const uint32_t *)((const char *)src + pitch);
+			dst += width;
+		}
+		data = conv_buffer;
+		pitch = width * sizeof(uint16_t);
+	}
 
 	if (thread_video) {
 		pthread_mutex_lock(&core_mx);

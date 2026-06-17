@@ -143,6 +143,7 @@ typedef struct Core {
 	void *(*get_memory_data)(unsigned id);
 	size_t (*get_memory_size)(unsigned id);
 	uint64_t serialization_quirks;
+	int pixel_format;
 } Core;
 
 typedef struct Game {
