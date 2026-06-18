@@ -61,6 +61,7 @@ typedef struct MinimeTraits {
 	int axis_ly_invert;
 	int axis_rx_invert;
 	int axis_ry_invert;
+	int undervolt_supported;
 } MinimeTraits;
 
 int MINIME_traitsInit(void);

@@ -51,6 +51,14 @@ static int next_behavior_value(int current, int direction, int allow_auto)
 	return values[next_enum_index(values, count, current, direction)];
 }
 
+static int next_undervolt_value(int current, int direction)
+{
+	return next_enum_index((int[]){SETTINGS_UNDERVOLT_OFF,
+			SETTINGS_UNDERVOLT_L1, SETTINGS_UNDERVOLT_L2,
+			SETTINGS_UNDERVOLT_L3},
+		SETTINGS_UNDERVOLT_COUNT, current, direction);
+}
+
 static const char *power_timeout_label(int value)
 {
 	switch (value) {
@@ -128,6 +136,16 @@ int SETTINGS_POWER_buildMenu(struct settings_screen *screen,
 	SETTINGS_copyText(item->badge.text, sizeof(item->badge.text),
 		power_behavior_label(item->data));
 
+	if (snapshot->power_undervolt_supported) {
+		item = &items[count++];
+		SETTINGS_initItem(item, SETTINGS_ITEM_ENUM,
+			SETTINGS_ACTION_POWER_UNDERVOLT, "CPU Undervolt",
+			"Applies on next boot");
+		item->data = snapshot->power_undervolt_level;
+		SETTINGS_copyText(item->badge.text, sizeof(item->badge.text),
+			SETTINGS_POWER_undervoltLabel(item->data));
+	}
+
 	return count;
 }
 
@@ -186,6 +204,17 @@ int SETTINGS_POWER_activate(struct settings_screen *screen,
 		else
 			SETTINGS_setNotice(screen,
 				"Power button behavior queued failed");
+		return 1;
+	case SETTINGS_ACTION_POWER_UNDERVOLT:
+		target = next_undervolt_value(item->data, direction);
+		rc = SETTINGS_JOBS_enqueue(SETTINGS_JOB_POWER_UNDERVOLT,
+			target, NULL);
+		if (rc == 0)
+			SETTINGS_setNotice(screen,
+				"CPU undervolt saved (applies on next boot)");
+		else
+			SETTINGS_setNotice(screen,
+				"CPU undervolt update queued failed");
 		return 1;
 	default:
 		return 0;

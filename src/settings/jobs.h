@@ -16,4 +16,6 @@ int SETTINGS_JOBS_enqueueTimeSet(int year, int month, int day, int hour,
 int SETTINGS_JOBS_enqueueTimezoneSet(int timezone_offset_minutes);
 void SETTINGS_JOBS_clearPrompt(void);
 
+const char *SETTINGS_POWER_undervoltLabel(int level);
+
 #endif

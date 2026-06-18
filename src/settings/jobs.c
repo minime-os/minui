@@ -17,11 +17,13 @@
 #include "timezone.h"
 #include "utils.h"
 #include "wireless.h"
+#include "traits.h"
 
 /* Shared service state lives under .minime/config/ so it is UI-agnostic. */
 #define WIFI_STATE_FILE SDCARD_PATH "/.minime/config/wifi.state"
 #define BT_STATE_FILE SDCARD_PATH "/.minime/config/bluetooth.state"
 #define POWER_POLICY_FILE USERDATA_PATH "/power.conf"
+#define DEVICE_CFG_PATH SDCARD_PATH "/.minime/config/device.cfg"
 #define TIMEZONE_STATE_FILE SDCARD_PATH "/.minime/config/timezone.conf"
 #define NTP_HELPER "/etc/init.d/S45ntpd"
 #define LOCALTIME_PATH "/etc/localtime"
@@ -484,6 +486,123 @@ static int jobs_write_power_policy(void)
 	return jobs_atomic_write_file(POWER_POLICY_FILE, buf);
 }
 
+const char *SETTINGS_POWER_undervoltLabel(int level)
+{
+	switch (level) {
+	case SETTINGS_UNDERVOLT_L1:
+		return "L1";
+	case SETTINGS_UNDERVOLT_L2:
+		return "L2";
+	case SETTINGS_UNDERVOLT_L3:
+		return "L3";
+	default:
+		return "Off";
+	}
+}
+
+static const char *undervolt_name(int level)
+{
+	switch (level) {
+	case SETTINGS_UNDERVOLT_L1:
+		return "l1";
+	case SETTINGS_UNDERVOLT_L2:
+		return "l2";
+	case SETTINGS_UNDERVOLT_L3:
+		return "l3";
+	default:
+		return "off";
+	}
+}
+
+static int undervolt_parse(const char *value)
+{
+	if (!value)
+		return SETTINGS_UNDERVOLT_OFF;
+	if (!strcmp(value, "l1"))
+		return SETTINGS_UNDERVOLT_L1;
+	if (!strcmp(value, "l2"))
+		return SETTINGS_UNDERVOLT_L2;
+	if (!strcmp(value, "l3"))
+		return SETTINGS_UNDERVOLT_L3;
+	return SETTINGS_UNDERVOLT_OFF;
+}
+
+static int jobs_read_undervolt_level(void)
+{
+	char buffer[1024];
+	char *line;
+	char *saveptr = NULL;
+
+	buffer[0] = '\0';
+	getFile((char *)DEVICE_CFG_PATH, buffer, sizeof(buffer));
+	if (!buffer[0])
+		return SETTINGS_UNDERVOLT_OFF;
+
+	line = strtok_r(buffer, "\n", &saveptr);
+	while (line) {
+		char *key = trim(line);
+		char *value;
+
+		if (key[0] == '\0' || key[0] == '#') {
+			line = strtok_r(NULL, "\n", &saveptr);
+			continue;
+		}
+		value = strchr(key, '=');
+		if (!value) {
+			line = strtok_r(NULL, "\n", &saveptr);
+			continue;
+		}
+		*value++ = '\0';
+		if (!strcmp(key, "undervolt"))
+			return undervolt_parse(trim(value));
+		line = strtok_r(NULL, "\n", &saveptr);
+	}
+	return SETTINGS_UNDERVOLT_OFF;
+}
+
+static int jobs_write_undervolt_level(int level)
+{
+	char buffer[1024];
+	char out[1280];
+	char *line;
+	char *saveptr = NULL;
+	int found = 0;
+	size_t pos = 0;
+	const char *name = undervolt_name(level);
+
+	buffer[0] = '\0';
+	getFile((char *)DEVICE_CFG_PATH, buffer, sizeof(buffer));
+
+	line = strtok_r(buffer, "\n", &saveptr);
+	while (line) {
+		char *key = trim(line);
+		char *value;
+
+		if (key[0] != '\0' && key[0] != '#' &&
+				(value = strchr(key, '=')) != NULL) {
+			*value = '\0';
+			if (!strcmp(key, "undervolt")) {
+				pos += snprintf(out + pos, sizeof(out) - pos,
+					"undervolt=%s\n", name);
+				found = 1;
+				line = strtok_r(NULL, "\n", &saveptr);
+				continue;
+			}
+			*value = '=';
+		}
+		pos += snprintf(out + pos, sizeof(out) - pos,
+			"%s\n", line);
+		line = strtok_r(NULL, "\n", &saveptr);
+	}
+	if (!found)
+		pos += snprintf(out + pos, sizeof(out) - pos,
+			"undervolt=%s\n", name);
+	if (pos >= sizeof(out))
+		return -ENAMETOOLONG;
+	out[pos] = '\0';
+	return jobs_atomic_write_file(DEVICE_CFG_PATH, out);
+}
+
 static int jobs_pidfile_exists(const char *path)
 {
 	return path && exists((char*)path);
@@ -592,6 +711,12 @@ static void jobs_refresh_snapshot(void)
 	next.power_auto_shutdown_timeout_ms = PWR_getAutoShutdownTimeoutMs();
 	next.power_lid_behavior = PWR_getLidBehavior();
 	next.power_button_behavior = PWR_getPowerButtonBehavior();
+	{
+		const MinimeTraits *traits = MINIME_traits();
+		next.power_undervolt_supported =
+			traits && traits->undervolt_supported > 0;
+	}
+	next.power_undervolt_level = jobs_read_undervolt_level();
 
 	(void)MINIME_wirelessWifiRefresh(&next);
 	(void)MINIME_wirelessBluetoothRefresh(&next);
@@ -817,6 +942,13 @@ static void jobs_handle_power_button_behavior(const struct settings_job *job)
 			"Power button behavior update failed.", NULL);
 }
 
+static void jobs_handle_power_undervolt(const struct settings_job *job)
+{
+	if (jobs_write_undervolt_level(job->value) != 0)
+		jobs_set_error_prompt("Power",
+			"CPU undervolt update failed.", NULL);
+}
+
 static void jobs_handle_job(const struct settings_job *job)
 {
 	if (!job)
@@ -862,6 +994,9 @@ static void jobs_handle_job(const struct settings_job *job)
 		break;
 	case SETTINGS_JOB_POWER_BUTTON_BEHAVIOR:
 		jobs_handle_power_button_behavior(job);
+		break;
+	case SETTINGS_JOB_POWER_UNDERVOLT:
+		jobs_handle_power_undervolt(job);
 		break;
 	case SETTINGS_JOB_POWER_BRIGHTNESS:
 		SetBrightness(job->value);

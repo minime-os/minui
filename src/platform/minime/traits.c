@@ -98,6 +98,7 @@ static void setValue(const char *key, const char *value)
 	else INT_TRAIT(axis_ly_invert);
 	else INT_TRAIT(axis_rx_invert);
 	else INT_TRAIT(axis_ry_invert);
+	else INT_TRAIT(undervolt_supported);
 
 #undef STRING_TRAIT
 #undef INT_TRAIT
