@@ -10,6 +10,8 @@
 #include "utils.h"
 
 #define WIFI_CONFIG_PATH "/mnt/sdcard/.minime/config/wifi.cfg"
+#define WIFI_ENABLE_WAIT_ATTEMPTS 40
+#define WIFI_ENABLE_WAIT_US 250000
 
 static int wifi_enabled = 0;
 static int wifi_scanning = 0;
@@ -54,23 +56,51 @@ static int is_wifi_interface_present(void) {
 	return exists(path);
 }
 
-static int is_wifi_interface_up(void) {
+static int is_wifi_interface_admin_up(void) {
 	char path[256];
+	char flags[32] = {0};
 	FILE* f;
+	unsigned long value;
 
-	snprintf(path, sizeof(path), "/sys/class/net/%s/operstate",
+	snprintf(path, sizeof(path), "/sys/class/net/%s/flags",
 		wifi_interface());
 	f = fopen(path, "r");
 	if (!f) return 0;
-	char state[16] = {0};
-	int up = 0;
-	if (fgets(state, sizeof(state), f)) {
-		if (strncmp(state, "up", 2) == 0) {
-			up = 1;
-		}
+	if (!fgets(flags, sizeof(flags), f)) {
+		fclose(f);
+		return 0;
 	}
 	fclose(f);
-	return up;
+	value = strtoul(flags, NULL, 0);
+	return (value & 1) != 0;
+}
+
+static int is_wifi_supplicant_ready(void) {
+	char line[32] = {0};
+	int ready = 0;
+	FILE* f = wifi_cli("ping");
+
+	if (!f) return 0;
+	if (fgets(line, sizeof(line), f) && strncmp(line, "PONG", 4) == 0)
+		ready = 1;
+	pclose(f);
+	return ready;
+}
+
+static int is_wifi_enabled(void) {
+	return is_wifi_interface_present() &&
+		(is_wifi_interface_admin_up() || is_wifi_supplicant_ready());
+}
+
+static int wait_for_wifi_enabled(void) {
+	int i;
+
+	for (i = 0; i < WIFI_ENABLE_WAIT_ATTEMPTS; i++) {
+		if (is_wifi_enabled())
+			return 0;
+		usleep(WIFI_ENABLE_WAIT_US);
+	}
+	return -1;
 }
 
 static void get_connected_ssid(char* ssid_out, size_t max_len) {
@@ -279,7 +309,7 @@ static void parse_scan_results(void) {
 ///////////////////////////////////////
 
 int MINIME_wirelessWifiInit(void) {
-	wifi_enabled = is_wifi_interface_present() && is_wifi_interface_up();
+	wifi_enabled = is_wifi_enabled();
 	wifi_scanning = 0;
 	connected_ssid[0] = '\0';
 	scanned_count = 0;
@@ -289,7 +319,7 @@ int MINIME_wirelessWifiInit(void) {
 int MINIME_wirelessWifiRefresh(struct settings_snapshot *snapshot) {
 	if (!snapshot) return -1;
 	
-	wifi_enabled = is_wifi_interface_present() && is_wifi_interface_up();
+	wifi_enabled = is_wifi_enabled();
 	snapshot->wifi_enabled = wifi_enabled;
 	snapshot->wifi_busy = 0; // S45wifi triggers quickly
 	snapshot->wifi_scanning = wifi_scanning;
@@ -323,11 +353,20 @@ int MINIME_wirelessWifiRefresh(struct settings_snapshot *snapshot) {
 }
 
 int MINIME_wirelessWifiSetEnabled(int enabled) {
+	int rc;
+
 	if (enabled) {
-		system("/etc/init.d/S45wifi start");
+		rc = system("/etc/init.d/S45wifi start");
+		if (rc != 0 || wait_for_wifi_enabled() != 0) {
+			(void)system("/etc/init.d/S45wifi stop");
+			wifi_enabled = 0;
+			return -1;
+		}
 		wifi_enabled = 1;
 	} else {
-		system("/etc/init.d/S45wifi stop");
+		rc = system("/etc/init.d/S45wifi stop");
+		if (rc != 0)
+			return -1;
 		wifi_enabled = 0;
 	}
 	return 0;

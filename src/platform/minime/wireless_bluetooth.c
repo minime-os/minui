@@ -3,8 +3,11 @@
 #include <errno.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "wireless.h"
 #include "traits.h"
@@ -15,9 +18,18 @@
 #define BT_PROPS_IFACE "org.freedesktop.DBus.Properties"
 #define BT_ADAPTER_IFACE "org.bluez.Adapter1"
 #define BT_DEVICE_IFACE "org.bluez.Device1"
+#define BT_MINIME_DIR SDCARD_PATH "/.minime"
+#define BT_CONFIG_DIR BT_MINIME_DIR "/config"
+#define BT_ENABLE_DIR BT_CONFIG_DIR "/bluetooth"
+#define BT_ENABLE_FILE BT_ENABLE_DIR "/enabled"
+#define BT_DBUS_INIT "/etc/init.d/S30dbus-daemon"
+#define BT_BLUETOOTHD_INIT "/etc/init.d/S40bluetoothd"
+#define BT_BLUEALSA_INIT "/etc/init.d/S41bluealsa"
 
 #define BT_MAX_PATH 192
 #define BT_MAX_CACHE_DEVICES 32
+#define BT_ADAPTER_WAIT_ATTEMPTS 20
+#define BT_ADAPTER_WAIT_US 250000
 
 ///////////////////////////////////////
 struct bt_device {
@@ -48,6 +60,76 @@ int MINIME_wirelessHasBluetooth(void)
 	const MinimeTraits *traits = MINIME_traits();
 
 	return traits && MINIME_traitAvailable(traits->bluetooth_adapter);
+}
+
+///////////////////////////////////////
+static int bt_ensure_dir(const char *path)
+{
+	if (mkdir(path, 0755) != 0 && errno != EEXIST)
+		return -errno;
+	return 0;
+}
+
+static void bt_run_init(const char *script, const char *action)
+{
+	char command[128];
+
+	snprintf(command, sizeof(command), "%s %s >/dev/null 2>&1", script,
+		action);
+	(void)system(command);
+}
+
+static int bt_create_enable_file(void)
+{
+	FILE *file;
+	int rc;
+
+	rc = bt_ensure_dir(BT_MINIME_DIR);
+	if (rc != 0)
+		return rc;
+	rc = bt_ensure_dir(BT_CONFIG_DIR);
+	if (rc != 0)
+		return rc;
+	rc = bt_ensure_dir(BT_ENABLE_DIR);
+	if (rc != 0)
+		return rc;
+	file = fopen(BT_ENABLE_FILE, "w");
+	if (!file)
+		return -errno;
+	fputs("1\n", file);
+	fclose(file);
+	return 0;
+}
+
+static int bt_start_services(void)
+{
+	int rc;
+
+	rc = bt_create_enable_file();
+	if (rc != 0)
+		return rc;
+	bt_run_init(BT_DBUS_INIT, "start");
+	bt_run_init(BT_BLUETOOTHD_INIT, "start");
+	bt_run_init(BT_BLUEALSA_INIT, "start");
+	return 0;
+}
+
+static void bt_disconnect_bus(void)
+{
+	if (!bt_state.conn)
+		return;
+	dbus_connection_close(bt_state.conn);
+	dbus_connection_unref(bt_state.conn);
+	bt_state.conn = NULL;
+}
+
+static void bt_stop_services(void)
+{
+	bt_run_init(BT_BLUEALSA_INIT, "stop");
+	bt_run_init(BT_BLUETOOTHD_INIT, "stop");
+	bt_run_init(BT_DBUS_INIT, "stop");
+	unlink(BT_ENABLE_FILE);
+	bt_disconnect_bus();
 }
 
 ///////////////////////////////////////
@@ -328,8 +410,11 @@ static int bt_connect_bus(void)
 {
 	DBusError err;
 
-	if (bt_state.conn)
-		return 0;
+	if (bt_state.conn) {
+		if (dbus_connection_get_is_connected(bt_state.conn))
+			return 0;
+		bt_disconnect_bus();
+	}
 
 	dbus_error_init(&err);
 	bt_state.conn = dbus_bus_get_private(DBUS_BUS_SYSTEM, &err);
@@ -353,6 +438,19 @@ static int bt_refresh_cache(void)
 	bt_parse_managed_objects(reply);
 	dbus_message_unref(reply);
 	return 0;
+}
+
+static int bt_wait_for_adapter(void)
+{
+	int i;
+
+	for (i = 0; i < BT_ADAPTER_WAIT_ATTEMPTS; i++) {
+		if (bt_connect_bus() == 0 && bt_refresh_cache() == 0 &&
+				bt_state.adapter_path[0])
+			return 0;
+		usleep(BT_ADAPTER_WAIT_US);
+	}
+	return -ENODEV;
 }
 
 static int bt_set_bool_property(const char *path, const char *iface,
@@ -406,11 +504,7 @@ int MINIME_wirelessBluetoothInit(void)
 
 void MINIME_wirelessBluetoothQuit(void)
 {
-	if (!bt_state.conn)
-		return;
-	dbus_connection_close(bt_state.conn);
-	dbus_connection_unref(bt_state.conn);
-	bt_state.conn = NULL;
+	bt_disconnect_bus();
 	bt_reset_cache();
 }
 
@@ -464,16 +558,30 @@ int MINIME_wirelessBluetoothRefresh(struct settings_snapshot *snapshot)
 
 int MINIME_wirelessBluetoothSetEnabled(int enabled)
 {
-	if (bt_connect_bus() != 0)
-		return -ENOTCONN;
-	if (bt_refresh_cache() != 0)
-		return -EIO;
-	if (!bt_state.adapter_path[0])
-		return -ENODEV;
-	if (!enabled)
-		(void)MINIME_wirelessBluetoothSetScanning(0);
-	return bt_set_bool_property(bt_state.adapter_path, BT_ADAPTER_IFACE,
-		"Powered", enabled);
+	int rc = 0;
+
+	if (enabled) {
+		rc = bt_start_services();
+		if (rc != 0)
+			return rc;
+		rc = bt_wait_for_adapter();
+		if (rc == 0)
+			rc = bt_set_bool_property(bt_state.adapter_path,
+				BT_ADAPTER_IFACE, "Powered", 1);
+		if (rc != 0)
+			bt_stop_services();
+		return rc;
+	}
+
+	if (bt_connect_bus() == 0 && bt_refresh_cache() == 0 &&
+			bt_state.adapter_path[0]) {
+		if (bt_state.scanning)
+			(void)MINIME_wirelessBluetoothSetScanning(0);
+		rc = bt_set_bool_property(bt_state.adapter_path, BT_ADAPTER_IFACE,
+			"Powered", 0);
+	}
+	bt_stop_services();
+	return rc;
 }
 
 int MINIME_wirelessBluetoothSetScanning(int enabled)

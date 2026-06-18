@@ -99,20 +99,28 @@ static int jobs_queue_pop(struct settings_job *job)
 
 static void jobs_clear_prompt_locked(void)
 {
+	if (jobs.snapshot.prompt.type == SETTINGS_PROMPT_NONE)
+		return;
 	memset(&jobs.snapshot.prompt, 0, sizeof(jobs.snapshot.prompt));
+	jobs.snapshot.generation++;
 }
 
 static void jobs_set_prompt_locked(int type, const char *title,
 	const char *message, const char *detail, const char *arg)
 {
 	struct settings_prompt *prompt = &jobs.snapshot.prompt;
+	struct settings_prompt next;
 
-	memset(prompt, 0, sizeof(*prompt));
-	prompt->type = type;
-	SETTINGS_copyText(prompt->title, sizeof(prompt->title), title);
-	SETTINGS_copyText(prompt->message, sizeof(prompt->message), message);
-	SETTINGS_copyText(prompt->detail, sizeof(prompt->detail), detail);
-	SETTINGS_copyText(prompt->arg, sizeof(prompt->arg), arg);
+	memset(&next, 0, sizeof(next));
+	next.type = type;
+	SETTINGS_copyText(next.title, sizeof(next.title), title);
+	SETTINGS_copyText(next.message, sizeof(next.message), message);
+	SETTINGS_copyText(next.detail, sizeof(next.detail), detail);
+	SETTINGS_copyText(next.arg, sizeof(next.arg), arg);
+	if (memcmp(prompt, &next, sizeof(next)) == 0)
+		return;
+	*prompt = next;
+	jobs.snapshot.generation++;
 }
 
 static void jobs_set_error_prompt(const char *title, const char *message,
@@ -1151,6 +1159,5 @@ void SETTINGS_JOBS_clearPrompt(void)
 {
 	pthread_mutex_lock(&jobs.lock);
 	jobs_clear_prompt_locked();
-	jobs.snapshot.generation++;
 	pthread_mutex_unlock(&jobs.lock);
 }
