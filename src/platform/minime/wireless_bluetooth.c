@@ -28,7 +28,7 @@
 
 #define BT_MAX_PATH 192
 #define BT_MAX_CACHE_DEVICES 32
-#define BT_ADAPTER_WAIT_ATTEMPTS 20
+#define BT_ADAPTER_WAIT_ATTEMPTS 80
 #define BT_ADAPTER_WAIT_US 250000
 
 ///////////////////////////////////////

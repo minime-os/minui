@@ -395,8 +395,7 @@ int MINIME_wirelessWifiConnect(const char *ssid, const char *passphrase, int hid
 		passphrase : "");
 
 	// Trigger wpa_supplicant configuration reload / connection attempt
-	system("/etc/init.d/S45wifi restart");
-	return 0;
+	return system("/etc/init.d/S45wifi reload") == 0 ? 0 : -1;
 }
 
 int MINIME_wirelessWifiDisconnect(void) {
@@ -411,6 +410,5 @@ int MINIME_wirelessWifiDisconnect(void) {
 int MINIME_wirelessWifiForget(const char *ssid) {
 	if (!ssid) return -1;
 	remove_network_from_config(ssid);
-	system("/etc/init.d/S45wifi restart");
-	return 0;
+	return system("/etc/init.d/S45wifi reload") == 0 ? 0 : -1;
 }
